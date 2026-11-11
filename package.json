@@ -1,0 +1,17 @@
+{
+  "name": "neurosurgery-cpt-look-up-tool",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Installable, offline CPT code look-up (PWA) focused on neurosurgery.",
+  "type": "module",
+  "scripts": {
+    "build": "node tools/build.mjs",
+    "test": "node tools/test.mjs",
+    "deploy": "bash tools/deploy.sh",
+    "icons": "python3 tools/make-icons.py"
+  },
+  "devDependencies": {
+    "@fontsource/barlow": "^5.0.0",
+    "@fontsource/barlow-condensed": "^5.0.0"
+  }
+}
