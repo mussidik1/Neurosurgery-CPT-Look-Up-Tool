@@ -1,7 +1,10 @@
-// Service worker: precache the whole app so it works offline; network-first for the page so updates arrive.
+// Service worker: keeps a full copy of the app so it works offline.
+// Scripts and styles have a content hash in their file names, and the page itself is always fetched fresh
+// when there is a connection, so a page can never be paired with an older cached script or stylesheet.
 const VERSION = '__VERSION__';
 const CACHE = `neuro-cpt-${VERSION}`;
 const PRECACHE = __PRECACHE__;
+const SLOW_NETWORK_MS = 5000;
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -19,34 +22,33 @@ self.addEventListener('activate', (event) => {
   );
 });
 
+// The saved copy of the page that matches this version's saved scripts and styles.
+const savedPage = () => caches.open(CACHE).then((c) => c.match('./'));
+
+async function page(request) {
+  // Ask the server directly (no browser cache) so a new version shows up on the first visit after it ships.
+  const network = fetch(request.url, { cache: 'no-cache', credentials: 'same-origin' })
+    .then((res) => (res.redirected ? Response.redirect(res.url, 302) : res));
+  // On a very slow connection, open the saved copy instead of waiting.
+  const slow = new Promise((resolve) => setTimeout(resolve, SLOW_NETWORK_MS)).then(savedPage);
+  try {
+    return await Promise.race([network, slow.then((res) => res || network)]);
+  } catch {
+    return (await savedPage()) || Response.error();
+  }
+}
+
 self.addEventListener('fetch', (event) => {
   const req = event.request;
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return;
 
-  // Page navigations: try the network (fresh), fall back to the cached shell when offline.
   if (req.mode === 'navigate') {
-    event.respondWith(
-      fetch(req)
-        .then((res) => {
-          const copy = res.clone();
-          caches.open(CACHE).then((c) => c.put('./', copy));
-          return res;
-        })
-        .catch(() => caches.match('./', { ignoreSearch: true }))
-    );
+    event.respondWith(page(req));
     return;
   }
 
-  // Static assets: cache first (they are versioned with this worker).
-  event.respondWith(
-    caches.match(req, { ignoreSearch: true }).then((hit) => hit || fetch(req).then((res) => {
-      if (res.ok) {
-        const copy = res.clone();
-        caches.open(CACHE).then((c) => c.put(req, copy));
-      }
-      return res;
-    }))
-  );
+  // Everything else: the saved copy for this exact address, otherwise the network.
+  event.respondWith(caches.open(CACHE).then((c) => c.match(req)).then((hit) => hit || fetch(req)));
 });

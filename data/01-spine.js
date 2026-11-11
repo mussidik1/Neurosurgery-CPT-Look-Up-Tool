@@ -71,7 +71,7 @@ add("Spine", "Cervical fusion", [
 ]);
 
 add("Spine", "Thoracic & lumbar fusion", [
-  ["*22612", "Posterolateral (intertransverse) fusion, lumbar, 1 interspace", "plf|posterolateral fusion|lumbar fusion|spinal fusion|spine fusion|intertransverse fusion|lumbar posterolateral fusion|pslf", "Each additional: 22614. If an interbody fusion (TLIF/PLIF) is done at the same level, use 22633 instead."],
+  ["*22612", "Posterolateral (intertransverse) fusion, lumbar, 1 interspace", "plf|posterolateral fusion|lumbar fusion|spinal fusion|spine fusion|intertransverse fusion|lumbar posterolateral fusion|pslf|posterior lumbar fusion", "Each additional: 22614. If an interbody fusion (TLIF/PLIF) is done at the same level, use 22633 instead."],
   ["22610", "Posterior/posterolateral fusion, thoracic, 1 interspace", "thoracic fusion posterior|posterior thoracic fusion", "Each additional: 22614."],
   ["*22630", "Posterior interbody fusion (PLIF/TLIF), lumbar, 1 interspace (no posterolateral fusion)", "plif|posterior lumbar interbody fusion|interbody only posterior|tlif without plf", "Each additional: 22632. Cage: 22853."],
   ["22632", "Posterior interbody fusion, each additional lumbar interspace", "add-on plif"],

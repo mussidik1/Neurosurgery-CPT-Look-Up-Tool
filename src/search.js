@@ -4,6 +4,8 @@
 const STOP = new Set(['a', 'an', 'the', 'of', 'for', 'to', 'in', 'on', 'at', 'by', 'and', 'or', 'per', 'is', 'what', 'whats', 's']);
 // Words that help when they match but shouldn't sink a result when they don't.
 const SOFT = new Set(['with', 'surgery', 'surgical', 'procedure', 'operation', 'scan', 'test', 'testing', 'study', 'exam', 'examination', 'code', 'cpt', 'done', 'performed', 'patient', 'pt']);
+// Descriptive words a surgeon adds ("open L2-5 laminectomy", "2 level ACDF"). They help ranking but are never required.
+const DESCRIPTIVE = new Set(['open', 'level', 'segment', 'interspace', 'multilevel', 'single']);
 // Tokens that only match exactly (no prefix or typo matching).
 const EXACT = new Set(['with', 'without', 'no', 'non', 'new', 'left', 'right', 'first', 'each', 'one', 'two']);
 
@@ -99,7 +101,9 @@ function editDistance(a, b, max) {
 
 const isNum = (t) => /^\d+(\.\d+)?$/.test(t);
 
-function tokenScore(qt, et) {
+// `known`: the query word exists as-is in the data, so it is not a typo. Typo matching is skipped for it,
+// which keeps "laminotomy" from matching "laminectomy" and "bilateral" from matching "lateral".
+function tokenScore(qt, et, known = false) {
   if (et === qt) return 1;
   if (EXACT.has(qt) || EXACT.has(et)) return 0;
   if (isNum(qt)) {
@@ -111,7 +115,7 @@ function tokenScore(qt, et) {
     if (qt.length === 2) return 0.5;
     return 0;
   }
-  if (qt.length >= 4 && et.length >= 4 && !isNum(et)) {
+  if (!known && qt.length >= 4 && et.length >= 4 && !isNum(et)) {
     const max = qt.length >= 8 ? 2 : 1;
     const d = editDistance(qt, et, max);
     if (d === 1) return 0.66;
@@ -152,16 +156,20 @@ export function createIndex(rows, categories = []) {
     const weights = new Float32Array(w.size);
     let k = 0;
     for (const [t, weight] of w) { ids[k] = idOf(t); weights[k] = weight; k++; }
-    const phrases = [tokenize(nameText).join(' '), ...synList.map((s) => tokenize(s).join(' '))].filter(Boolean);
-    return { i, code, name, syn, note, cat, sub, p, sys, ids, weights, phrases, nameLen: name.length };
+    const phraseTokens = [tokenize(nameText), ...synList.map((s) => tokenize(s))];
+    const phrases = phraseTokens.map((t) => t.join(' ')).filter(Boolean);
+    // The same phrases without spine regions or levels, for queries that name a level ("L4-S1 posterior fusion"
+    // should match "posterior lumbar fusion").
+    const phrasesNoLevel = phraseTokens.map((t) => t.filter((x) => !regionOf(x)).join(' ')).filter(Boolean);
+    return { i, code, name, syn, note, cat, sub, p, sys, ids, weights, phrases, phrasesNoLevel, nameLen: name.length };
   });
   return { entries, vocab };
 }
 
-function scoreEntry(e, qScores, qTokens, qNorm) {
-  let sum = 0, matched = 0, required = 0;
-  for (let q = 0; q < qTokens.length; q++) {
-    const soft = SOFT.has(qTokens[q]);
+function scoreEntry(e, qScores, softFlags, qNorm, single, typo, descFlags, hasLevel) {
+  let sum = 0, matched = 0, required = 0, missingDesc = false;
+  for (let q = 0; q < qScores.length; q++) {
+    const soft = softFlags[q];
     if (!soft) required++;
     const scores = qScores[q];
     let best = 0;
@@ -169,7 +177,7 @@ function scoreEntry(e, qScores, qTokens, qNorm) {
       const s = scores[e.ids[k]] * e.weights[k];
       if (s > best) best = s;
     }
-    if (best > 0) { sum += best; if (!soft) matched++; }
+    if (best > 0) { sum += best; if (!soft) matched++; } else if (descFlags && descFlags[q]) missingDesc = true;
   }
   if (sum === 0) return 0;
   const frac = required ? matched / required : 1;
@@ -177,22 +185,68 @@ function scoreEntry(e, qScores, qTokens, qNorm) {
   if (required >= 3 && frac < 0.6) return 0;
   let score = sum * frac * frac;
   let bonus = 0;
-  const single = qTokens.length === 1;
   const starts = single ? 0.4 : 1.3;
   const inside = single ? 0.2 : 0.8;
-  for (const ph of e.phrases) {
+  for (const ph of hasLevel ? e.phrasesNoLevel : e.phrases) {
     if (ph === qNorm) { bonus = 2.2; break; }
-    if (single && qNorm.length >= 5 && ph.indexOf(' ') < 0 && editDistance(qNorm, ph, qNorm.length >= 8 ? 2 : 1) > 0) bonus = Math.max(bonus, 1.5);
+    if (typo && qNorm.length >= 5 && ph.indexOf(' ') < 0 && editDistance(qNorm, ph, qNorm.length >= 8 ? 2 : 1) > 0) bonus = Math.max(bonus, 1.5);
     if (qNorm.length >= 3 && ph.startsWith(qNorm)) bonus = Math.max(bonus, starts);
     else if (qNorm.length >= 4 && ph.includes(qNorm)) bonus = Math.max(bonus, inside);
   }
-  score += bonus;
+  // "open LP shunt": a code that lacks a descriptive word the user typed gets less credit for the phrase match.
+  score += missingDesc ? bonus / 2 : bonus;
   score += e.p ? 0.35 : 0;
   score += 0.25 / (1 + e.nameLen / 45); // gentle preference for broader, shorter entries
   return score;
 }
 
 const CODE_RE = /^(\d{3,5}|\d{4}[tu]|[a-v]\d{1,4})$/;
+
+// Spinal levels: "L4-5", "L4-L5", "C5-6", "T12-L1", "L5-S1", "L2 to L5", "C5", "L45".
+// They become optional words (the level and its region: cervical, thoracic, lumbar) so a query like
+// "open L2-5 laminectomy" ranks lumbar codes first instead of failing on "L2" and "5".
+const REGION = { c: 'cervical', t: 'thoracic', l: 'lumbar', s: 'sacral' };
+const LAST = { c: 8, t: 12, l: 6, s: 5 };
+const START = { c: 0, t: 7, l: 19, s: 24 };
+const ORDER = 'ctls';
+const LEVEL_RE = /\b([ctls])(\d{1,2})(?:\s*(?:-|–|—|to|through|thru)\s*([ctls])?(\d{1,2})|([ctls])(\d{1,2}))?\b/g;
+
+const REGION_WORDS = new Set(Object.values(REGION));
+// "lumbar" -> "lumbar"; a level written in the data such as "c2" or "l5" -> its region.
+function regionOf(token) {
+  if (REGION_WORDS.has(token)) return token;
+  const m = /^([ctls])(\d{1,2})$/.exec(token);
+  return m && +m[2] >= 1 && +m[2] <= LAST[m[1]] ? REGION[m[1]] : null;
+}
+
+function extractLevels(text) {
+  const words = [];
+  const valid = ([r, n]) => n >= 1 && n <= LAST[r];
+  const rest = text.replace(LEVEL_RE, (m, a, n1, b, n2, c, n3) => {
+    let from = [a, +n1];
+    let to = null;
+    if (n2 !== undefined) to = [b || a, +n2];
+    else if (n3 !== undefined) to = [c, +n3];
+    else if (n1.length === 2 && !valid(from)) {
+      // "l45" = L4-L5, "c56" = C5-C6 (only for neighbouring levels)
+      if (+n1[1] !== +n1[0] + 1) return m;
+      from = [a, +n1[0]];
+      to = [a, +n1[1]];
+    }
+    if (!valid(from) || (to && !valid(to))) return m;
+    const i = ORDER.indexOf(from[0]);
+    const j = to ? ORDER.indexOf(to[0]) : i;
+    if (j < i) return m;
+    words.push(from.join(''));
+    if (to) words.push(to.join(''));
+    const regions = ORDER.slice(i, j + 1);
+    for (const r of regions) if (!(r === 's' && regions.includes('l'))) words.push(REGION[r]); // L5-S1 is lumbar
+    // A range of 2+ levels (L2-5, C5-7) also favors the "each additional" and multi-segment codes.
+    if (to && START[to[0]] + to[1] - (START[from[0]] + from[1]) >= 2) words.push('additional', 'multilevel');
+    return ' ';
+  });
+  return { rest, words: [...new Set(words)] };
+}
 
 export function search(index, raw, { category = -1, limit = 60 } = {}) {
   const trimmed = String(raw || '').trim();
@@ -222,17 +276,49 @@ export function search(index, raw, { category = -1, limit = 60 } = {}) {
   }
 
   // 3) text search
-  let qTokens = tokenize(trimmed);
-  if (!qTokens.length) qTokens = tokenize(trimmed, { keepStop: true });
-  if (qTokens.length) {
-    const qNorm = qTokens.join(' ');
-    const qScores = qTokens.map((qt) => {
-      const arr = new Float32Array(index.vocab.length);
-      for (let v = 0; v < index.vocab.length; v++) arr[v] = tokenScore(qt, index.vocab[v]);
-      return arr;
-    });
+  const levels = extractLevels(trimmed.toLowerCase());
+  let words = tokenize(levels.rest);
+  if (!words.length && !levels.words.length) words = tokenize(levels.rest, { keepStop: true });
+  if (!index.vocabSet) index.vocabSet = new Set(index.vocab);
+  // Weak hints (descriptive words, and the "more than one level" words added for ranges) count half.
+  const HALF = new Set([...DESCRIPTIVE, 'additional', 'multilevel']);
+  const scoresFor = (qt, hint) => {
+    const arr = new Float32Array(index.vocab.length);
+    const known = index.vocabSet.has(qt);
+    const f = hint && HALF.has(qt) ? 0.5 : 1;
+    let any = false;
+    for (let v = 0; v < index.vocab.length; v++) { arr[v] = tokenScore(qt, index.vocab[v], known) * f; if (arr[v] > 0) any = true; }
+    return any ? arr : null;
+  };
+  // Words that match nothing at all are left out, so one unknown word doesn't hide every result.
+  const typed = [];
+  for (const t of words) { const sc = scoresFor(t, DESCRIPTIVE.has(t)); if (sc) typed.push({ t, sc }); }
+  const extra = [];
+  for (const t of levels.words) { if (!typed.some((x) => x.t === t)) { const sc = scoresFor(t, true); if (sc) extra.push({ t, sc }); } }
+  if (typed.length || extra.length) {
+    const optional = (t) => SOFT.has(t) || DESCRIPTIVE.has(t) || /^\d{1,2}$/.test(t);
+    // Phrase matching uses the words that carry the meaning ("laminectomy", not "open" or "2").
+    let core = typed.filter((x) => !DESCRIPTIVE.has(x.t) && !/^\d{1,2}$/.test(x.t)).map((x) => x.t);
+    if (!core.length) core = typed.map((x) => x.t);
+    const qNorm = core.join(' ');
+    const single = core.length === 1;
+    const typo = single && !index.vocabSet.has(qNorm); // a one-word query that isn't in the data: probably misspelled
+    const qScores = [...typed.map((x) => x.sc), ...extra.map((x) => x.sc)];
+    const softFlags = [...typed.map((x) => optional(x.t)), ...extra.map(() => true)];
+    const descFlags = typed.some((x) => DESCRIPTIVE.has(x.t)) ? [...typed.map((x) => DESCRIPTIVE.has(x.t)), ...extra.map(() => false)] : null;
+    // With a level in the query, codes for a different part of the spine (e.g., lumbar-only codes for "C3-6") drop down.
+    const wanted = new Set(levels.words.filter((w) => REGION_WORDS.has(w)));
     for (const e of pool) {
-      const s = scoreEntry(e, qScores, qTokens, qNorm);
+      let s = scoreEntry(e, qScores, softFlags, qNorm, single, typo, descFlags, wanted.size > 0);
+      if (s > 0 && wanted.size) {
+        let has = false, other = false;
+        for (let k = 0; k < e.ids.length; k++) {
+          if (e.weights[k] < 0.45) continue; // ignore notes and category words
+          const region = regionOf(index.vocab[e.ids[k]]);
+          if (region) { if (wanted.has(region)) has = true; else other = true; }
+        }
+        if (other && !has) s *= 0.5;
+      }
       if (s > 0) put(e, s);
     }
   }

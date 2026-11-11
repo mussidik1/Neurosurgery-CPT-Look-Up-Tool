@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-build="__VERSION__">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -16,12 +16,18 @@
   <meta name="apple-mobile-web-app-title" content="Neuro CPT">
   <meta name="format-detection" content="telephone=no">
   <script>
-    // Mark the page as the installed app or a normal web page before anything paints.
+    // Before anything paints: installed app or web page, and the saved color and text-size settings.
     (function () {
+      var d = document.documentElement;
       var mq = function (q) { return !!(window.matchMedia && window.matchMedia(q).matches); };
+      var get = function (k) { try { return JSON.parse(localStorage.getItem('neurocpt.' + k)); } catch (e) { return null; } };
       var app = mq('(display-mode: standalone)') || mq('(display-mode: fullscreen)') ||
         mq('(display-mode: window-controls-overlay)') || window.navigator.standalone === true;
-      document.documentElement.className += app ? ' is-app' : ' is-web';
+      var theme = get('theme');
+      var light = theme === 'light' || (theme === 'auto' && mq('(prefers-color-scheme: light)'));
+      var size = get('textSize');
+      d.className += (app ? ' is-app' : ' is-web') + (light ? ' theme-light' : '') + (size === 2 || size === 3 ? ' text-' + size : '');
+      if (light) document.querySelector('meta[name="color-scheme"]').setAttribute('content', 'light');
     })();
   </script>
   <link rel="preload" href="fonts/cardo-400.woff2" as="font" type="font/woff2" crossorigin>
@@ -35,8 +41,8 @@
       <div class="band-row">
         <h1 class="title">Neurosurgery CPT Look-Up Tool</h1>
         <button class="install web-only" id="install" type="button" hidden>Install app</button>
-        <button class="icon-btn" id="about-open" type="button" aria-label="About this tool" aria-haspopup="dialog">
-          <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><circle cx="12" cy="12" r="9.25" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M12 10.6v6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="12" cy="7.6" r="1.15" fill="currentColor"/></svg>
+        <button class="icon-btn" id="about-open" type="button" aria-label="Settings and info" aria-haspopup="dialog">
+          <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M4 7.5h8.6M17.4 7.5H20M4 16.5h2.6M11.4 16.5H20" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><circle cx="15" cy="7.5" r="2.4" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="9" cy="16.5" r="2.4" fill="none" stroke="currentColor" stroke-width="1.7"/></svg>
         </button>
       </div>
       <form class="search" role="search" id="search-form">
@@ -57,12 +63,20 @@
   </main>
 
   <footer class="foot">
-    <p id="foot-count">Plain-language summaries, updated for CPT 2026.</p>
-    <p>Verify codes in the current CPT codebook or with your coder before billing.</p>
-    <p class="foot-links">
-      <button class="linkish web-only" type="button" data-open-install>Add to Home Screen</button>
-      <button class="linkish" type="button" id="about-open-2">About this tool</button>
-    </p>
+    <div class="foot-inner">
+      <p id="foot-count">Plain-language summaries, updated for CPT 2026.</p>
+      <p>Verify codes in the current CPT codebook or with your coder before billing.</p>
+      <p class="foot-links">
+        <button class="linkish web-only" type="button" data-open-install>Add to Home Screen</button>
+        <button class="linkish" type="button" id="about-open-2">Settings and info</button>
+      </p>
+    </div>
+    <div class="colophon">
+      <div class="colophon-inner">
+        <p>Made by Mustafa M. Sidik, MS, NRP, with Claude Opus 5.5. Not for commercial use.</p>
+        <p>Problems or suggestions? <a class="report" id="report" href="mailto:mussidik1@gmail.com?subject=Neuro%20CPT%20problem%20report">Email mussidik1@gmail.com</a></p>
+      </div>
+    </div>
   </footer>
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
@@ -117,7 +131,7 @@
       </section>
 
       <div class="after">
-        <img src="icons/icon-192.png" width="64" height="64" alt="" class="after-icon">
+        <img src="icons/icon-192.png" width="64" height="64" alt="" class="after-icon" loading="lazy">
         <p>Look for <strong>Neuro CPT</strong> on your Home Screen and open it from there. It opens straight to search, full screen, and works offline.</p>
       </div>
 
@@ -131,16 +145,36 @@
   <div class="sheet-backdrop" id="about" hidden>
     <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="about-title" tabindex="-1">
       <div class="sheet-head">
-        <h2 id="about-title">About this tool</h2>
+        <h2 id="about-title">Settings and info</h2>
         <button class="icon-btn" type="button" id="about-close" aria-label="Close">
           <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M7 7l10 10M17 7 7 17" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
         </button>
       </div>
       <div class="sheet-body">
-        <p>Search by procedure name, abbreviation (ACDF, TLIF, EVD), common phrasing or the code itself. Tap a result to copy its code. Star the ones you use often.</p>
+        <fieldset class="setting">
+          <legend>Colors</legend>
+          <div class="seg">
+            <label><input type="radio" name="theme" value="dark"><span>Navy</span></label>
+            <label><input type="radio" name="theme" value="light"><span>Light</span></label>
+            <label><input type="radio" name="theme" value="auto"><span>Match device</span></label>
+          </div>
+        </fieldset>
+        <fieldset class="setting">
+          <legend>Text size</legend>
+          <div class="seg">
+            <label><input type="radio" name="textSize" value="1"><span>Standard</span></label>
+            <label><input type="radio" name="textSize" value="2"><span class="size-2">Large</span></label>
+            <label><input type="radio" name="textSize" value="3"><span class="size-3">Larger</span></label>
+          </div>
+        </fieldset>
+        <h3>How it works</h3>
+        <p>Search by procedure name, abbreviation (ACDF, TLIF, EVD), spine level (L4-5 TLIF), common phrasing or the code itself. Tap a result to copy its code. Star the ones you use often.</p>
+        <p>Many cards also list codes that aren’t billed together and common diagnoses. Tap a diagnosis to copy its ICD-10-CM code.</p>
         <p id="about-count"></p>
         <h3>Before you bill</h3>
         <p>Descriptions here are plain-language summaries written for quick look-up. They are not the official AMA CPT descriptors. Confirm the code, its full descriptor, bundling edits and payer rules in the current CPT codebook or with your coding team.</p>
+        <p>The “not billed with” reminders cover common pairs from CPT instructions. They are not the full Medicare NCCI edit table, so check NCCI and payer edits too.</p>
+        <p>Common diagnoses are typical ICD-10-CM examples from the CDC code files (April 2026 update), not a complete list. The right diagnosis code always comes from the documentation.</p>
         <p>Notes such as typical add-ons are reminders, not coding advice.</p>
         <div class="web-only">
           <h3>Use it like an app</h3>

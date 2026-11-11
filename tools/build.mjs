@@ -1,5 +1,9 @@
 // Build: validate the data files, then assemble the static site into ./site
 // Usage: node tools/build.mjs
+//
+// Every asset except index.html and sw.js gets a content hash in its file name (app.3f9c1a2b.js).
+// A page can then never load a mix of new HTML and old cached files, even while an older
+// service worker is still in control of the browser.
 import fs from 'node:fs';
 import path from 'node:path';
 import vm from 'node:vm';
@@ -40,8 +44,10 @@ const DELETED = new Set([
   '49590', '21800', '32405', '33010', '33011', '61795', '0191T',
 ]);
 
-function loadRows() {
+function loadData() {
   const rows = [];
+  const bundles = [];
+  const dxGroups = [];
   let current = '';
   const add = (cat, sub, items) => {
     for (const it of items) {
@@ -51,13 +57,19 @@ function loadRows() {
       rows.push({ code, name, syn, note, cat, sub, p, file: current });
     }
   };
+  const bundle = (a, b, reason) => bundles.push({ type: 'pair', a: [a], b: [b], reason, file: current });
+  const included = (codes, inc, reason) => bundles.push({ type: 'incl', a: codes, b: inc, reason, file: current });
+  const dx = (codes, icds) => dxGroups.push({ codes, icds, file: current });
   const files = fs.readdirSync(DATA_DIR).filter((f) => f.endsWith('.js')).sort();
   for (const f of files) {
     current = f;
-    vm.runInNewContext(fs.readFileSync(path.join(DATA_DIR, f), 'utf8'), { add }, { filename: f });
+    vm.runInNewContext(fs.readFileSync(path.join(DATA_DIR, f), 'utf8'), { add, bundle, included, dx }, { filename: f });
   }
-  return rows;
+  const icd = JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'icd10.json'), 'utf8'));
+  return { rows, bundles, dxGroups, icd };
 }
+
+export function loadRows() { return loadData().rows; }
 
 export function validate(rows) {
   const errors = [];
@@ -78,14 +90,11 @@ export function validate(rows) {
     if (/[?]/.test(r.syn)) errors.push(`${r.code}: "?" found in synonyms`);
     if (/\|\|/.test(r.syn) || /^\||\|$/.test(r.syn)) errors.push(`${r.code}: empty synonym`);
     if (r.sys === 'CPT' && r.cat === 'HCPCS') errors.push(`${r.code}: CPT code filed under HCPCS`);
-    // Codes referenced inside notes should exist in the data or be well-known externals.
   }
-  // Cross-check: every 5-character code mentioned in a note that we *claim* as a pairing should exist,
-  // unless it is in a short allow-list of codes intentionally not in the data.
+  // Every code mentioned in a note must exist, except a short list of intentional outside references.
   const ALLOW_MISSING = new Set(['95717', '95726', '55700', '55708', '55715', '96139']);
   for (const r of rows) {
-    const refs = (r.note.match(/\b(\d{5}|[A-V]\d{4})\b/g) || []);
-    for (const ref of refs) {
+    for (const ref of (r.note.match(/\b(\d{5}|[A-V]\d{4})\b/g) || [])) {
       if (!seen.has(ref) && !ALLOW_MISSING.has(ref)) errors.push(`${r.code}: note references ${ref}, which is not in the data`);
     }
   }
@@ -93,17 +102,64 @@ export function validate(rows) {
   return errors;
 }
 
-function hashFiles(dir) {
-  const h = crypto.createHash('sha256');
-  const walk = (d) => {
-    for (const name of fs.readdirSync(d).sort()) {
-      const p = path.join(d, name);
-      if (fs.statSync(p).isDirectory()) walk(p);
-      else if (name !== 'sw.js') { h.update(path.relative(dir, p)); h.update(fs.readFileSync(p)); }
-    }
+function validateExtras({ rows, bundles, dxGroups, icd }) {
+  const errors = [];
+  const codes = new Set(rows.map((r) => r.code));
+  for (const b of bundles) {
+    for (const c of [...b.a, ...b.b]) if (!codes.has(c)) errors.push(`${b.file}: bundling rule names ${c}, which is not in the data`);
+    if (!b.reason) errors.push(`${b.file}: bundling rule without a reason`);
+  }
+  for (const g of dxGroups) {
+    for (const c of g.codes) if (!codes.has(c)) errors.push(`${g.file}: diagnosis group names procedure ${c}, which is not in the data`);
+    for (const d of g.icds) if (!icd[d]) errors.push(`${g.file}: ${d} missing from data/icd10.json (run tools/icd-labels.py)`);
+  }
+  return errors;
+}
+
+// code -> [[kind, [codes], reason]]  kind: "not" (don't bill together) or "inc" (these are included; don't add them)
+function bundleMap(bundles) {
+  const map = new Map();
+  const push = (code, kind, others, reason) => {
+    if (!map.has(code)) map.set(code, []);
+    const list = map.get(code);
+    const hit = list.find((x) => x[0] === kind && x[2] === reason);
+    if (hit) { for (const o of others) if (!hit[1].includes(o)) hit[1].push(o); } else list.push([kind, [...others], reason]);
   };
-  walk(dir);
-  return h.digest('hex').slice(0, 10);
+  for (const b of bundles) {
+    if (b.type === 'pair') { push(b.a[0], 'not', b.b, b.reason); push(b.b[0], 'not', b.a, b.reason); }
+    else { for (const p of b.a) push(p, 'inc', b.b, b.reason); for (const i of b.b) push(i, 'not', b.a, b.reason); }
+  }
+  return Object.fromEntries(map);
+}
+
+function dxMap(dxGroups) {
+  const map = new Map();
+  for (const g of dxGroups) for (const c of g.codes) {
+    if (!map.has(c)) map.set(c, []);
+    for (const d of g.icds) if (!map.get(c).includes(d)) map.get(c).push(d);
+  }
+  return Object.fromEntries(map);
+}
+
+const shortHash = (buf) => crypto.createHash('sha256').update(buf).digest('hex').slice(0, 8);
+
+// Replace exact asset references that sit between quotes or parentheses.
+function rewrite(text, renames) {
+  let out = text;
+  for (const [from, to] of renames) {
+    const esc = from.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    out = out.replace(new RegExp(`(["'(])(\\./)?${esc}(["')])`, 'g'), (m, a, dot, b) => `${a}${dot || ''}${to}${b}`);
+  }
+  return out;
+}
+
+// Rename OUT/relPath to name.<hash>.ext and return the new relative path.
+function fingerprint(relPath) {
+  const abs = path.join(OUT, relPath);
+  const ext = path.extname(relPath);
+  const hashed = `${relPath.slice(0, -ext.length)}.${shortHash(fs.readFileSync(abs))}${ext}`;
+  fs.renameSync(abs, path.join(OUT, hashed));
+  return hashed;
 }
 
 function listFiles(dir) {
@@ -120,18 +176,18 @@ function listFiles(dir) {
 }
 
 function build() {
-  const rows = loadRows();
-  const errors = validate(rows);
+  const data = loadData();
+  const errors = [...validate(data.rows), ...validateExtras(data)];
   if (errors.length) {
     console.error(`Data validation failed (${errors.length}):\n  ` + errors.join('\n  '));
     process.exit(1);
   }
+  const { rows } = data;
 
   fs.rmSync(OUT, { recursive: true, force: true });
   fs.mkdirSync(path.join(OUT, 'icons'), { recursive: true });
   fs.mkdirSync(path.join(OUT, 'fonts'), { recursive: true });
 
-  // Static sources
   for (const f of ['index.html', 'app.css', 'app.js', 'search.js', 'manifest.webmanifest']) {
     fs.copyFileSync(path.join(SRC, f), path.join(OUT, f));
   }
@@ -148,33 +204,53 @@ function build() {
   }
   fs.writeFileSync(path.join(OUT, '.nojekyll'), '');
 
-  // Data module (compact rows)
+  // Data module
   const compact = rows.map((r) => [r.code, r.name, r.syn, r.note, CATEGORIES.indexOf(r.cat), r.sub, r.p, r.sys]);
   const counts = { total: rows.length, CPT: 0, HCPCS: 0, MOD: 0 };
   for (const r of rows) counts[r.sys]++;
-  const dataJs =
+  const bundles = bundleMap(data.bundles);
+  const dx = dxMap(data.dxGroups);
+  const usedIcd = {};
+  for (const list of Object.values(dx)) for (const d of list) usedIcd[d] = data.icd[d];
+  fs.writeFileSync(path.join(OUT, 'data.js'),
     `// Generated by tools/build.mjs — do not edit. Plain-language summaries, not official AMA descriptors.\n` +
     `export const CATEGORIES = ${JSON.stringify(CATEGORIES)};\n` +
     `export const COUNTS = ${JSON.stringify(counts)};\n` +
     `export const DATA_EDITION = "CPT 2026";\n` +
     `export const ADDONS = ${JSON.stringify(ADDONS)};\n` +
-    `export default ${JSON.stringify(compact)};\n`;
-  fs.writeFileSync(path.join(OUT, 'data.js'), dataJs);
+    `export const BUNDLES = ${JSON.stringify(bundles)};\n` +
+    `export const DX = ${JSON.stringify(dx)};\n` +
+    `export const ICD = ${JSON.stringify(usedIcd)};\n` +
+    `export default ${JSON.stringify(compact)};\n`);
 
-  // Service worker: stamp version + precache list
-  const version = hashFiles(OUT);
-  const precache = ['./', ...listFiles(OUT).filter((f) => f !== 'sw.js' && f !== '.nojekyll' && f !== 'index.html')];
-  const sw = fs.readFileSync(path.join(SRC, 'sw.js'), 'utf8')
-    .replace('__VERSION__', version)
-    .replace('__PRECACHE__', JSON.stringify(precache, null, 2));
-  fs.writeFileSync(path.join(OUT, 'sw.js'), sw);
+  // Code and style files get a content hash in their names (app.3f9c1a2b.js). index.html is always fetched
+  // fresh, so it can never be paired with an older cached script or stylesheet. Icons, fonts and the
+  // manifest keep fixed names; they rarely change and the Home Screen icon needs a stable address.
+  const renames = [];
+  for (const f of ['data.js', 'search.js']) renames.push([f, fingerprint(f)]);
+  const appPath = path.join(OUT, 'app.js');
+  fs.writeFileSync(appPath, rewrite(fs.readFileSync(appPath, 'utf8'), renames));
+  for (const f of ['app.js', 'app.css']) renames.push([f, fingerprint(f)]);
+  const indexPath = path.join(OUT, 'index.html');
+  const html0 = rewrite(fs.readFileSync(indexPath, 'utf8'), renames);
+  for (const f of ['app.js', 'app.css']) {
+    if (new RegExp(`["'(]${f.replace('.', '\\.')}["')]`).test(html0)) { console.error(`index.html still references ${f}`); process.exit(1); }
+  }
 
-  // Bake the version into the page so "About" can show it
-  const html = fs.readFileSync(path.join(OUT, 'index.html'), 'utf8').replace('__VERSION__', version);
+  // Service worker: version + precache list
+  const all = listFiles(OUT).filter((f) => f !== '.nojekyll');
+  const version = shortHash(Buffer.from(all.map((f) => f + shortHash(fs.readFileSync(path.join(OUT, f)))).join('|')));
+  const html = html0.replaceAll('__VERSION__', version);
   fs.writeFileSync(path.join(OUT, 'index.html'), html);
+  const precache = ['./', ...all.filter((f) => f !== 'index.html')];
+  fs.writeFileSync(path.join(OUT, 'sw.js'), fs.readFileSync(path.join(SRC, 'sw.js'), 'utf8')
+    .replace('__VERSION__', version)
+    .replace('__PRECACHE__', JSON.stringify(precache, null, 2)));
 
-  console.log(`Built ${rows.length} codes (CPT ${counts.CPT}, HCPCS ${counts.HCPCS}, modifiers ${counts.MOD}) -> site/  version ${version}`);
+  const nb = Object.keys(bundles).length;
+  const nd = Object.keys(dx).length;
+  console.log(`Built ${rows.length} codes (CPT ${counts.CPT}, HCPCS ${counts.HCPCS}, modifiers ${counts.MOD}); ` +
+    `bundling notes on ${nb} codes; diagnoses on ${nd} codes (${Object.keys(usedIcd).length} ICD-10-CM) -> site/  version ${version}`);
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) build();
-export { loadRows };

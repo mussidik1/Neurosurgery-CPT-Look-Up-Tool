@@ -11,6 +11,7 @@ cp -R site/. "$TMP"/
 cd "$TMP"
 git init -q -b gh-pages
 git add -A
-git commit -q -m "Deploy site from $(git -C "$ROOT" rev-parse --short HEAD 2>/dev/null || echo local)"
+# Optional extra commit-message lines (for example attribution trailers) come from DEPLOY_TRAILERS.
+git commit -q -m "Deploy site from $(git -C "$ROOT" rev-parse --short HEAD 2>/dev/null || echo local)" ${DEPLOY_TRAILERS:+-m "$DEPLOY_TRAILERS"}
 git push -f "$REMOTE" gh-pages
 echo "Deployed to gh-pages."

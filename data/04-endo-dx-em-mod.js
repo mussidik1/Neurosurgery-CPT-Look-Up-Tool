@@ -29,8 +29,8 @@ add("Endovascular", "Stroke & neurointervention", [
 ]);
 
 add("Neurodiagnostics", "Intraoperative monitoring", [
-  ["*95940", "Intraoperative neurophysiology monitoring in the OR, one-on-one, each 15 minutes", "ionm|neuromonitoring|intraoperative monitoring|intraoperative neurophysiologic monitoring|neuromonitoring in room", "Add-on to the baseline study codes (e.g., 95938, 95939, 95861). Remote/multiple cases: 95941 (Medicare: G0453)."],
-  ["95941", "Intraoperative neurophysiology monitoring, remote or >1 case, per hour", "remote ionm|remote neuromonitoring", "Add-on code. Medicare uses G0453."],
+  ["*95940", "Intraoperative neurophysiology monitoring in the OR, one-on-one, each 15 minutes", "ionm|neuromonitoring|intraoperative monitoring|intraoperative neurophysiologic monitoring|neuromonitoring in room", "Billed by the monitoring professional, not the operating surgeon or anesthesiologist. Add-on to the baseline study codes (e.g., 95938, 95939, 95861). Remote/multiple cases: 95941 (Medicare: G0453)."],
+  ["95941", "Intraoperative neurophysiology monitoring, remote or >1 case, per hour", "remote ionm|remote neuromonitoring", "Billed by the monitoring professional, not the operating surgeon or anesthesiologist. Medicare uses G0453."],
   ["*95938", "Somatosensory evoked potentials (SSEP), upper and lower limbs", "ssep|ssep upper and lower|somatosensory evoked potentials"],
   ["95925", "Somatosensory evoked potentials (SSEP), upper limbs", "ssep upper"],
   ["95926", "Somatosensory evoked potentials (SSEP), lower limbs", "ssep lower"],

@@ -1,4 +1,4 @@
-import DATA, { CATEGORIES, COUNTS, ADDONS, DATA_EDITION } from './data.js';
+import DATA, { CATEGORIES, COUNTS, ADDONS, DATA_EDITION, BUNDLES, DX, ICD } from './data.js';
 import { createIndex, search, highlight, escapeHtml } from './search.js';
 
 const index = createIndex(DATA, CATEGORIES);
@@ -6,12 +6,20 @@ const byCode = new Map(index.entries.map((e) => [e.code, e]));
 const addons = new Set(ADDONS);
 
 const $ = (s) => document.querySelector(s);
+// Attach a listener only when the element exists, so one missing element can never stop the whole app.
+const on = (target, type, fn) => {
+  const el = typeof target === 'string' ? $(target) : target;
+  if (el) el.addEventListener(type, fn);
+};
+const root = document.documentElement;
 const qEl = $('#q');
 const resultsEl = $('#results');
 const statusEl = $('#status');
 const tabsEl = $('#tabs');
 const clearBtn = $('#clear');
 const toastEl = $('#toast');
+const aboutEl = $('#about');
+const installPage = $('#install-page');
 
 const SLUG = CATEGORIES.map((c) => c.toLowerCase().replace(/[^a-z]+/g, '-').replace(/^-|-$/g, ''));
 const STAR = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.6l2.6 5.3 5.8.8-4.2 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.2-4.1 5.8-.8z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>';
@@ -21,6 +29,14 @@ const QUICK = [
   'EVD', 'VP shunt', 'Chiari decompression', 'Kyphoplasty', 'SCS trial', 'Carpal tunnel release',
   'Stroke thrombectomy', 'Neuromonitoring', 'Critical care', 'Modifier 62',
 ];
+
+const ua = navigator.userAgent;
+const isIOS = /iphone|ipad|ipod/i.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+const isIPhone = /iphone|ipod/i.test(ua);
+const isAndroid = /android/i.test(ua);
+const inOtherApp = /FBAN|FBAV|Instagram|LinkedInApp|Line\/|Snapchat|GSA\//i.test(ua);
+const device = isIOS ? 'ios' : isAndroid ? 'android' : 'desktop';
+const isApp = root.classList.contains('is-app');
 
 // ---------- storage (best effort; private mode can throw) ----------
 const store = {
@@ -34,11 +50,36 @@ const store = {
 let starred = new Set(store.get('starred', []).filter((c) => byCode.has(c)));
 let recent = store.get('recent', []).filter((c) => byCode.has(c));
 let category = -1;
-const isApp = document.documentElement.classList.contains('is-app');
+let installOpen = false;
 
 // ---------- rendering ----------
+const refButton = (c) => (byCode.has(c) ? `<button class="ref" type="button" data-ref="${c}">${c}</button>` : c);
+
 function linkCodes(html) {
-  return html.replace(/\b(\d{5}|[A-V]\d{4})\b/g, (m) => (byCode.has(m) ? `<button class="ref" type="button" data-ref="${m}">${m}</button>` : m));
+  return html.replace(/\b(\d{5}|[A-V]\d{4})\b/g, (m) => refButton(m));
+}
+
+function joinCodes(codes) {
+  const refs = codes.map(refButton);
+  return refs.length <= 2 ? refs.join(' or ') : `${refs.slice(0, -1).join(', ')} or ${refs[refs.length - 1]}`;
+}
+
+// Bundling reminders and common diagnoses, shown under the note.
+function extrasHTML(e) {
+  const parts = [];
+  const rules = BUNDLES[e.code];
+  if (rules && rules.length) {
+    parts.push(`<ul class="bundle">${rules.map(([kind, codes, reason]) =>
+      `<li>${kind === 'inc' ? 'Don’t add' : 'Not billed with'} ${joinCodes(codes)}: ${linkCodes(escapeHtml(reason))}.</li>`).join('')}</ul>`);
+  }
+  const dx = DX[e.code];
+  if (dx && dx.length) {
+    parts.push(`<details class="dx"><summary>Common diagnoses <span class="count">${dx.length}</span></summary><ul>${dx.map((d) => {
+      const name = escapeHtml(ICD[d] || '');
+      return `<li><button class="icd" type="button" data-icd="${d}" aria-label="Copy ${d}: ${name}"><span class="icd-code">${d}</span><span class="icd-name">${name}</span></button></li>`;
+    }).join('')}</ul></details>`);
+  }
+  return parts.length ? `\n  <div class="extra">${parts.join('')}</div>` : '';
 }
 
 function hitHTML(e, q, showSub = true) {
@@ -54,7 +95,7 @@ function hitHTML(e, q, showSub = true) {
     <span class="code">${e.sys === 'MOD' ? '-' : ''}${escapeHtml(e.code)}</span>
     <span class="name">${q ? highlight(e.name, q) : escapeHtml(e.name)}</span>
     ${showSub || tags.length ? `<span class="meta">${showSub ? `<span class="sub">${escapeHtml(e.sub)}</span>` : ''}${tags.join('')}</span>` : ''}
-  </button>${e.note ? `\n  <p class="note">${linkCodes(escapeHtml(e.note))}</p>` : ''}
+  </button>${e.note ? `\n  <p class="note">${linkCodes(escapeHtml(e.note))}</p>` : ''}${extrasHTML(e)}
   <button class="star" type="button" data-star="${e.code}" aria-pressed="${isStar}" aria-label="${isStar ? 'Unstar' : 'Star'} ${e.code}">${STAR}</button>
 </li>`;
 }
@@ -122,7 +163,7 @@ function renderResults(q) {
 
 function render() {
   const q = qEl.value.trim();
-  clearBtn.hidden = !q;
+  if (clearBtn) clearBtn.hidden = !q;
   if (q) renderResults(q);
   else if (category >= 0) renderBrowse();
   else renderHome();
@@ -153,6 +194,7 @@ function readUrl() {
 // ---------- copy ----------
 let toastTimer = 0;
 function toast(html) {
+  if (!toastEl) return;
   toastEl.innerHTML = html;
   toastEl.classList.add('show');
   clearTimeout(toastTimer);
@@ -175,29 +217,33 @@ async function copyText(text) {
     return ok;
   }
 }
+function flash(el, ms = 450) {
+  if (!el) return;
+  el.classList.add('copied');
+  setTimeout(() => el.classList.remove('copied'), ms);
+}
 async function copyCode(code, li) {
   const ok = await copyText(code);
-  if (ok) {
-    toast(`Copied <span class="t-code">${escapeHtml(code)}</span>`);
-    if (navigator.vibrate) navigator.vibrate(12);
-  } else {
-    toast(`Code <span class="t-code">${escapeHtml(code)}</span>`);
-  }
-  if (li) {
-    li.classList.add('copied');
-    setTimeout(() => li.classList.remove('copied'), 450);
-  }
+  toast(`${ok ? 'Copied' : 'Code'} <span class="t-code">${escapeHtml(code)}</span>`);
+  if (ok && navigator.vibrate) navigator.vibrate(12);
+  flash(li);
   recent = [code, ...recent.filter((c) => c !== code)].slice(0, 12);
   store.set('recent', recent);
+}
+async function copyIcd(code, btn) {
+  const ok = await copyText(code);
+  toast(`${ok ? 'Copied' : 'Diagnosis code'} <span class="t-code">${escapeHtml(code)}</span>`);
+  if (ok && navigator.vibrate) navigator.vibrate(12);
+  flash(btn);
 }
 
 function toggleStar(code, btn) {
   if (starred.has(code)) starred.delete(code); else starred.add(code);
   store.set('starred', [...starred]);
-  const on = starred.has(code);
+  const isOn = starred.has(code);
   document.querySelectorAll(`.star[data-star="${code}"]`).forEach((b) => {
-    b.setAttribute('aria-pressed', String(on));
-    b.setAttribute('aria-label', `${on ? 'Unstar' : 'Star'} ${code}`);
+    b.setAttribute('aria-pressed', String(isOn));
+    b.setAttribute('aria-label', `${isOn ? 'Unstar' : 'Star'} ${code}`);
   });
   if (!qEl.value.trim() && category < 0) {
     // keep focus stable on the home screen re-render
@@ -208,11 +254,11 @@ function toggleStar(code, btn) {
 }
 
 // ---------- events ----------
-qEl.addEventListener('input', schedule);
-$('#search-form').addEventListener('submit', (ev) => { ev.preventDefault(); qEl.blur(); });
-clearBtn.addEventListener('click', () => { qEl.value = ''; render(); qEl.focus(); });
+on(qEl, 'input', schedule);
+on('#search-form', 'submit', (ev) => { ev.preventDefault(); qEl.blur(); });
+on(clearBtn, 'click', () => { qEl.value = ''; render(); qEl.focus(); });
 
-tabsEl.addEventListener('click', (ev) => {
+on(tabsEl, 'click', (ev) => {
   const btn = ev.target.closest('.tab');
   if (!btn) return;
   category = Number(btn.dataset.cat);
@@ -222,7 +268,7 @@ tabsEl.addEventListener('click', (ev) => {
   window.scrollTo({ top: 0 });
 });
 
-resultsEl.addEventListener('click', (ev) => {
+on(resultsEl, 'click', (ev) => {
   const t = ev.target;
   const ref = t.closest('.ref');
   if (ref) { qEl.value = ref.dataset.ref; category = -1; renderTabs(); render(); window.scrollTo({ top: 0 }); return; }
@@ -230,6 +276,8 @@ resultsEl.addEventListener('click', (ev) => {
   if (star) { toggleStar(star.dataset.star, star); return; }
   const copy = t.closest('.copy');
   if (copy) { copyCode(copy.dataset.copy, copy.closest('.hit')); return; }
+  const icd = t.closest('.icd');
+  if (icd) { copyIcd(icd.dataset.icd, icd); return; }
   const chip = t.closest('.chip');
   if (chip) { qEl.value = chip.dataset.q; render(); return; }
   if (t.closest('[data-hide-card]')) { store.set('installCardHidden', true); renderHome(); return; }
@@ -237,10 +285,11 @@ resultsEl.addEventListener('click', (ev) => {
 });
 
 document.addEventListener('keydown', (ev) => {
-  if (ev.key === '/' && !installOpen && document.activeElement !== qEl && !aboutEl.contains(document.activeElement)) {
+  const aboutOpen = aboutEl && !aboutEl.hidden;
+  if (ev.key === '/' && !installOpen && !aboutOpen && document.activeElement !== qEl) {
     ev.preventDefault(); qEl.focus(); qEl.select();
   } else if (ev.key === 'Escape') {
-    if (!aboutEl.hidden) closeAbout();
+    if (aboutOpen) closeAbout();
     else if (installOpen) closeInstall();
     else if (document.activeElement === qEl && qEl.value) { qEl.value = ''; render(); }
   }
@@ -256,34 +305,86 @@ window.addEventListener('hashchange', () => {
   readUrl(); renderTabs(); render();
 });
 
-// ---------- about sheet ----------
-const aboutEl = $('#about');
+// ---------- display settings (colors and text size) ----------
+const schemeMeta = document.querySelector('meta[name="color-scheme"]');
+const lightQuery = window.matchMedia ? window.matchMedia('(prefers-color-scheme: light)') : null;
+let theme = store.get('theme', 'dark');
+if (!['dark', 'light', 'auto'].includes(theme)) theme = 'dark';
+let textSize = store.get('textSize', 1);
+if (![1, 2, 3].includes(textSize)) textSize = 1;
+
+function applyTheme() {
+  const light = theme === 'light' || (theme === 'auto' && !!lightQuery && lightQuery.matches);
+  root.classList.toggle('theme-light', light);
+  if (schemeMeta) schemeMeta.setAttribute('content', light ? 'light' : 'dark');
+}
+function applyTextSize() {
+  root.classList.toggle('text-2', textSize === 2);
+  root.classList.toggle('text-3', textSize === 3);
+}
+function syncSettings() {
+  document.querySelectorAll('input[name="theme"]').forEach((i) => { i.checked = i.value === theme; });
+  document.querySelectorAll('input[name="textSize"]').forEach((i) => { i.checked = Number(i.value) === textSize; });
+}
+on(aboutEl, 'change', (ev) => {
+  const t = ev.target;
+  if (t.name === 'theme') { theme = t.value; store.set('theme', theme); applyTheme(); }
+  if (t.name === 'textSize') { textSize = Number(t.value); store.set('textSize', textSize); applyTextSize(); }
+});
+if (lightQuery) {
+  const follow = () => { if (theme === 'auto') applyTheme(); };
+  if (lightQuery.addEventListener) lightQuery.addEventListener('change', follow);
+  else if (lightQuery.addListener) lightQuery.addListener(follow);
+}
+applyTheme();
+applyTextSize();
+syncSettings();
+
+// ---------- settings and info sheet ----------
 let lastFocus = null;
 function openAbout() {
+  if (!aboutEl) return;
   lastFocus = document.activeElement;
+  syncSettings();
   aboutEl.hidden = false;
   document.body.style.overflow = 'hidden';
-  aboutEl.querySelector('.sheet').focus();
+  const sheet = aboutEl.querySelector('.sheet');
+  if (sheet) { sheet.scrollTop = 0; sheet.focus(); }
 }
 function closeAbout() {
+  if (!aboutEl) return;
   aboutEl.hidden = true;
   document.body.style.overflow = '';
   if (lastFocus && lastFocus.focus) lastFocus.focus();
 }
-$('#about-open').addEventListener('click', openAbout);
-$('#about-open-2').addEventListener('click', openAbout);
-$('#about-close').addEventListener('click', closeAbout);
-aboutEl.addEventListener('click', (ev) => { if (ev.target === aboutEl) closeAbout(); });
+on('#about-open', 'click', openAbout);
+on('#about-open-2', 'click', openAbout);
+on('#about-close', 'click', closeAbout);
+on(aboutEl, 'click', (ev) => { if (ev.target === aboutEl) closeAbout(); });
 
 const fmt = (n) => n.toLocaleString('en-US');
-$('#about-count').textContent = `${fmt(COUNTS.total)} entries: ${fmt(COUNTS.CPT)} CPT codes, ${fmt(COUNTS.HCPCS)} HCPCS Level II codes and ${fmt(COUNTS.MOD)} modifiers. Weighted toward neurosurgery and updated for ${DATA_EDITION}.`;
-$('#foot-count').textContent = `${fmt(COUNTS.total)} codes in plain language, updated for ${DATA_EDITION}.`;
+const aboutCount = $('#about-count');
+if (aboutCount) aboutCount.textContent = `${fmt(COUNTS.total)} entries: ${fmt(COUNTS.CPT)} CPT codes, ${fmt(COUNTS.HCPCS)} HCPCS Level II codes and ${fmt(COUNTS.MOD)} modifiers. Weighted toward neurosurgery and updated for ${DATA_EDITION}.`;
+const footCount = $('#foot-count');
+if (footCount) footCount.textContent = `${fmt(COUNTS.total)} codes in plain language, updated for ${DATA_EDITION}.`;
+
+// ---------- problem reports: the email is prefilled with the build and the current search ----------
+on('#report', 'click', (ev) => {
+  const q = qEl.value.trim();
+  const where = isApp ? 'Home Screen app' : 'browser';
+  const deviceName = isIOS ? (isIPhone ? 'iPhone' : 'iPad') : isAndroid ? 'Android' : 'computer';
+  const body = ['What happened?', '', '', '--', ...(q ? [`Search: ${q}`] : []), `Build: ${root.dataset.build || '?'} (${deviceName}, ${where})`].join('\r\n');
+  ev.currentTarget.href = `mailto:mussidik1@gmail.com?subject=${encodeURIComponent('Neuro CPT problem report')}&body=${encodeURIComponent(body)}`;
+});
 
 // ---------- install (browser only; never shown inside the installed app) ----------
 const installBtn = $('#install');
-const installNowBtns = [$('#install-now'), $('#install-now-desktop')];
+const installNowBtns = [$('#install-now'), $('#install-now-desktop')].filter(Boolean);
 let deferredPrompt = null;
-const setInstallButtons = (show) => { installBtn.hidden = !show; installNowBtns.forEach((b) => { b.hidden = !show; }); };
+const setInstallButtons = (show) => {
+  if (installBtn) installBtn.hidden = !show;
+  installNowBtns.forEach((b) => { b.hidden = !show; });
+};
 window.addEventListener('beforeinstallprompt', (ev) => {
   ev.preventDefault();
   if (isApp) return;
@@ -297,23 +398,15 @@ async function promptInstall() {
   deferredPrompt = null;
   setInstallButtons(false);
 }
-installBtn.addEventListener('click', promptInstall);
-installNowBtns.forEach((b) => b.addEventListener('click', promptInstall));
+on(installBtn, 'click', promptInstall);
+installNowBtns.forEach((b) => on(b, 'click', promptInstall));
 window.addEventListener('appinstalled', () => setInstallButtons(false));
 
-const ua = navigator.userAgent;
-const isIOS = /iphone|ipad|ipod/i.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-const isIPhone = /iphone|ipod/i.test(ua);
-const isAndroid = /android/i.test(ua);
-const inOtherApp = /FBAN|FBAV|Instagram|LinkedInApp|Line\/|Snapchat|GSA\//i.test(ua);
-const device = isIOS ? 'ios' : isAndroid ? 'android' : 'desktop';
-
-const installPage = $('#install-page');
-let installOpen = false;
 let installPushed = false;
 let focusBeforeInstall = null;
 
 function showDevice(d) {
+  if (!installPage) return;
   installPage.querySelectorAll('.device').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.device === d)));
   installPage.querySelectorAll('.howto').forEach((sec) => { sec.hidden = sec.dataset.panel !== d; });
 }
@@ -324,16 +417,18 @@ function detectedText() {
   return text;
 }
 function openInstall(push = true) {
-  if (isApp || installOpen) return;
+  if (isApp || installOpen || !installPage) return;
   focusBeforeInstall = document.activeElement;
   installOpen = true;
   showDevice(device);
-  $('#detected').textContent = detectedText();
+  const detected = $('#detected');
+  if (detected) detected.textContent = detectedText();
   installPage.hidden = false;
   document.body.style.overflow = 'hidden';
   if (push && location.hash !== '#install') { history.pushState({ install: true }, '', '#install'); installPushed = true; }
   installPage.scrollTop = 0;
-  $('#install-title').focus({ preventScroll: true });
+  const title = $('#install-title');
+  if (title) title.focus({ preventScroll: true });
 }
 function closeInstall(fromHistory = false) {
   if (!installOpen) return;
@@ -347,33 +442,32 @@ function closeInstall(fromHistory = false) {
   installPushed = false;
   if (focusBeforeInstall && focusBeforeInstall.focus) focusBeforeInstall.focus({ preventScroll: true });
 }
-$('#install-back').addEventListener('click', () => closeInstall());
-installPage.querySelector('.device-pick').addEventListener('click', (ev) => {
+on('#install-back', 'click', () => closeInstall());
+on(installPage && installPage.querySelector('.device-pick'), 'click', (ev) => {
   const b = ev.target.closest('.device');
   if (b) showDevice(b.dataset.device);
 });
-$('#copy-install-link').addEventListener('click', async () => {
+on('#copy-install-link', 'click', async () => {
   const link = `${location.origin}${location.pathname}#install`;
   const ok = await copyText(link);
   toast(ok ? 'Link copied' : escapeHtml(link));
 });
 document.addEventListener('click', (ev) => {
   if (!ev.target.closest('[data-open-install]')) return;
-  if (!aboutEl.hidden) closeAbout();
+  if (aboutEl && !aboutEl.hidden) closeAbout();
   openInstall();
 });
 
 // ---------- offline ----------
+// Script and style names change with every release and the page is always fetched fresh when online,
+// so there is nothing to reload when a new version installs; it is simply ready for the next visit.
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    const hadController = !!navigator.serviceWorker.controller;
-    navigator.serviceWorker.register('./sw.js').catch(() => { /* offline support unavailable */ });
-    let reloaded = false;
-    navigator.serviceWorker.addEventListener('controllerchange', () => {
-      if (!hadController || reloaded) return;
-      reloaded = true;
-      location.reload();
-    });
+    navigator.serviceWorker.register('./sw.js').then((reg) => {
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') reg.update().catch(() => { /* offline */ });
+      });
+    }).catch(() => { /* offline support unavailable */ });
   });
 }
 
