@@ -5,9 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Neurosurgery CPT Look-Up Tool</title>
   <meta name="description" content="Type a procedure, abbreviation or code and get the CPT code. Neurosurgery-focused, works offline.">
-  <meta name="theme-color" content="#0F4B47" media="(prefers-color-scheme: light)">
-  <meta name="theme-color" content="#0A3431" media="(prefers-color-scheme: dark)">
-  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#07111F">
+  <meta name="color-scheme" content="dark">
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
@@ -16,8 +15,17 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Neuro CPT">
   <meta name="format-detection" content="telephone=no">
-  <link rel="preload" href="fonts/barlow-400.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="preload" href="fonts/barlow-condensed-600.woff2" as="font" type="font/woff2" crossorigin>
+  <script>
+    // Mark the page as the installed app or a normal web page before anything paints.
+    (function () {
+      var mq = function (q) { return !!(window.matchMedia && window.matchMedia(q).matches); };
+      var app = mq('(display-mode: standalone)') || mq('(display-mode: fullscreen)') ||
+        mq('(display-mode: window-controls-overlay)') || window.navigator.standalone === true;
+      document.documentElement.className += app ? ' is-app' : ' is-web';
+    })();
+  </script>
+  <link rel="preload" href="fonts/cardo-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="fonts/cardo-700.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="app.css">
   <script type="module" src="app.js"></script>
 </head>
@@ -26,7 +34,7 @@
     <div class="band">
       <div class="band-row">
         <h1 class="title">Neurosurgery CPT Look-Up Tool</h1>
-        <button class="install" id="install" type="button" hidden>Install app</button>
+        <button class="install web-only" id="install" type="button" hidden>Install app</button>
         <button class="icon-btn" id="about-open" type="button" aria-label="About this tool" aria-haspopup="dialog">
           <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><circle cx="12" cy="12" r="9.25" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M12 10.6v6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="12" cy="7.6" r="1.15" fill="currentColor"/></svg>
         </button>
@@ -50,16 +58,74 @@
 
   <footer class="foot">
     <p id="foot-count">Plain-language summaries, updated for CPT 2026.</p>
-    <p>Verify codes in the current CPT codebook or with your coder before billing. <button class="linkish" type="button" id="about-open-2">About this tool</button></p>
+    <p>Verify codes in the current CPT codebook or with your coder before billing.</p>
+    <p class="foot-links">
+      <button class="linkish web-only" type="button" data-open-install>Add to Home Screen</button>
+      <button class="linkish" type="button" id="about-open-2">About this tool</button>
+    </p>
   </footer>
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-  <div class="ios-hint" id="ios-hint" hidden>
-    <p>Install on your iPhone: tap
-      <svg viewBox="0 0 24 24" width="18" height="18" aria-label="Share" role="img"><path d="M12 3v12M8 7l4-4 4 4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 11v8.5h12V11" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
-      then <strong>Add to Home Screen</strong>.</p>
-    <button type="button" class="hint-close" id="ios-hint-close">Got it</button>
+  <!-- Add to Home Screen page: shown in the browser only, never inside the installed app -->
+  <div class="page web-only" id="install-page" role="dialog" aria-modal="true" aria-labelledby="install-title" hidden>
+    <div class="page-band">
+      <div class="page-band-row">
+        <button class="back" type="button" id="install-back">
+          <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span>Back to search</span>
+        </button>
+      </div>
+    </div>
+    <div class="page-body">
+      <h2 class="page-title" id="install-title" tabindex="-1">Add it to your Home Screen</h2>
+      <p class="page-lede">You get a Neuro CPT icon that opens full screen like an app and keeps working without a signal.</p>
+
+      <div class="device-pick" role="group" aria-label="Choose your device">
+        <button type="button" class="device" data-device="ios" aria-pressed="false">iPhone/iPad</button>
+        <button type="button" class="device" data-device="android" aria-pressed="false">Android</button>
+        <button type="button" class="device" data-device="desktop" aria-pressed="false">Computer</button>
+      </div>
+      <p class="detected" id="detected"></p>
+
+      <section class="howto" data-panel="ios" aria-label="iPhone or iPad steps">
+        <ol class="steps">
+          <li><p><strong>Open this page in Safari.</strong> If it opened inside another app, such as Gmail or Outlook, use that app’s “Open in Safari” option first.</p></li>
+          <li><p><strong>Tap Share</strong> <svg class="glyph" viewBox="0 0 24 24" aria-label="Share icon" role="img"><path d="M12 3.5v11M8 7.5l4-4 4 4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M6.5 10.5H5.5v10h13v-10h-1" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>. On iOS 26 and later, tap <span class="key">•••</span> next to the address bar first, then Share.</p></li>
+          <li><p><strong>Scroll down and tap Add to Home Screen</strong> <svg class="glyph" viewBox="0 0 24 24" aria-label="Add to Home Screen icon" role="img"><rect x="4" y="4" width="16" height="16" rx="4" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 8.5v7M8.5 12h7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>.</p></li>
+          <li><p><strong>Leave “Open as Web App” on, then tap Add.</strong> Older iPhones skip the switch; just tap Add.</p></li>
+        </ol>
+        <p class="aside">Using Chrome on an iPhone? Tap Share in the address bar, then Add to Home Screen. If it isn’t listed, open the page in Safari.</p>
+      </section>
+
+      <section class="howto" data-panel="android" aria-label="Android steps" hidden>
+        <button class="btn primary install-now" type="button" id="install-now" hidden>Install now</button>
+        <ol class="steps">
+          <li><p><strong>Open this page in Chrome.</strong></p></li>
+          <li><p><strong>Tap the menu</strong> <span class="key">⋮</span> in the top right corner.</p></li>
+          <li><p><strong>Tap Add to Home screen, then Install.</strong> Some phones show Install app in the menu instead; tap that.</p></li>
+        </ol>
+        <p class="aside">Samsung Internet: tap the menu <span class="key">≡</span>, then Add page to, then Home screen.</p>
+      </section>
+
+      <section class="howto" data-panel="desktop" aria-label="Computer steps" hidden>
+        <button class="btn primary install-now" type="button" id="install-now-desktop" hidden>Install now</button>
+        <ul class="browsers">
+          <li><p><strong>Chrome or Edge:</strong> click the install icon at the right end of the address bar, then Install. You can also find it in the browser menu.</p></li>
+          <li><p><strong>Safari on a Mac:</strong> choose File, then Add to Dock.</p></li>
+        </ul>
+      </section>
+
+      <div class="after">
+        <img src="icons/icon-192.png" width="64" height="64" alt="" class="after-icon">
+        <p>Look for <strong>Neuro CPT</strong> on your Home Screen and open it from there. It opens straight to search, full screen, and works offline.</p>
+      </div>
+
+      <div class="share-link">
+        <p>Sending this to a colleague? Share the link to this page.</p>
+        <button class="btn quiet" type="button" id="copy-install-link">Copy link to these steps</button>
+      </div>
+    </div>
   </div>
 
   <div class="sheet-backdrop" id="about" hidden>
@@ -76,8 +142,15 @@
         <h3>Before you bill</h3>
         <p>Descriptions here are plain-language summaries written for quick look-up. They are not the official AMA CPT descriptors. Confirm the code, its full descriptor, bundling edits and payer rules in the current CPT codebook or with your coding team.</p>
         <p>Notes such as typical add-ons are reminders, not coding advice.</p>
-        <h3>Install and offline use</h3>
-        <p>iPhone: open this page in Safari, tap Share, then Add to Home Screen. Android: open the browser menu and choose Install app or Add to Home screen. After the first visit it works without a connection.</p>
+        <div class="web-only">
+          <h3>Use it like an app</h3>
+          <p>Add it to your Home Screen for one-tap access and offline use.</p>
+          <p><button class="linkish" type="button" data-open-install>Show me how</button></p>
+        </div>
+        <div class="app-only">
+          <h3>Offline</h3>
+          <p>You’re using the installed app. It works without a connection and updates itself when you’re back online.</p>
+        </div>
         <h3>Fine print</h3>
         <p>CPT® is a registered trademark of the American Medical Association. HCPCS Level II codes and descriptors come from CMS. This tool is not affiliated with the AMA or CMS.</p>
         <p class="ver">Build __VERSION__</p>

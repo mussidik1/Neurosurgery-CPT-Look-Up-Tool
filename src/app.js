@@ -34,6 +34,7 @@ const store = {
 let starred = new Set(store.get('starred', []).filter((c) => byCode.has(c)));
 let recent = store.get('recent', []).filter((c) => byCode.has(c));
 let category = -1;
+const isApp = document.documentElement.classList.contains('is-app');
 
 // ---------- rendering ----------
 function linkCodes(html) {
@@ -67,8 +68,20 @@ function renderTabs() {
 
 function renderHome() {
   const parts = [];
-  parts.push(`<div class="home">
-    <p class="lede">Type a procedure, abbreviation or code. Tap any result to copy its code.</p>
+  parts.push('<div class="home">');
+  if (!isApp && !store.get('installCardHidden', false)) {
+    parts.push(`<div class="install-card web-only">
+      <img src="icons/icon-192.png" alt="" width="52" height="52">
+      <p class="ic-title">Use it like an app</p>
+      <p class="ic-text">Add it to your Home Screen for one-tap access that works offline.</p>
+      <div class="ic-actions">
+        <button class="btn primary" type="button" data-open-install>Show me how</button>
+        <button class="btn quiet" type="button" data-hide-card>Not now</button>
+      </div>
+    </div>`);
+  }
+  parts.push(`<p class="lede">Find a CPT code by procedure, abbreviation or number.</p>
+    <p class="lede-sub">Tap any result to copy its code.</p>
     <h2>Common searches</h2>
     <div class="chips">${QUICK.map((s) => `<button class="chip" type="button" data-q="${escapeHtml(s)}">${escapeHtml(s)}</button>`).join('')}</div>`);
   const stars = [...starred].map((c) => byCode.get(c)).filter(Boolean);
@@ -121,6 +134,7 @@ const schedule = () => { cancelAnimationFrame(frame); frame = requestAnimationFr
 
 // ---------- URL state (#q=...&s=...) ----------
 function syncUrl(q) {
+  if (installOpen) return;
   const params = new URLSearchParams();
   if (q) params.set('q', q);
   if (category >= 0) params.set('s', SLUG[category]);
@@ -218,19 +232,29 @@ resultsEl.addEventListener('click', (ev) => {
   if (copy) { copyCode(copy.dataset.copy, copy.closest('.hit')); return; }
   const chip = t.closest('.chip');
   if (chip) { qEl.value = chip.dataset.q; render(); return; }
+  if (t.closest('[data-hide-card]')) { store.set('installCardHidden', true); renderHome(); return; }
   if (t.closest('[data-all]')) { category = -1; renderTabs(); render(); }
 });
 
 document.addEventListener('keydown', (ev) => {
-  if (ev.key === '/' && document.activeElement !== qEl && !aboutEl.contains(document.activeElement)) {
+  if (ev.key === '/' && !installOpen && document.activeElement !== qEl && !aboutEl.contains(document.activeElement)) {
     ev.preventDefault(); qEl.focus(); qEl.select();
   } else if (ev.key === 'Escape') {
     if (!aboutEl.hidden) closeAbout();
+    else if (installOpen) closeInstall();
     else if (document.activeElement === qEl && qEl.value) { qEl.value = ''; render(); }
   }
 });
 
-window.addEventListener('hashchange', () => { readUrl(); renderTabs(); render(); });
+window.addEventListener('hashchange', () => {
+  if (location.hash === '#install') {
+    if (isApp) history.replaceState(null, '', location.pathname + location.search);
+    else openInstall(false);
+    return;
+  }
+  if (installOpen) closeInstall(true);
+  readUrl(); renderTabs(); render();
+});
 
 // ---------- about sheet ----------
 const aboutEl = $('#about');
@@ -255,30 +279,89 @@ const fmt = (n) => n.toLocaleString('en-US');
 $('#about-count').textContent = `${fmt(COUNTS.total)} entries: ${fmt(COUNTS.CPT)} CPT codes, ${fmt(COUNTS.HCPCS)} HCPCS Level II codes and ${fmt(COUNTS.MOD)} modifiers. Weighted toward neurosurgery and updated for ${DATA_EDITION}.`;
 $('#foot-count').textContent = `${fmt(COUNTS.total)} codes in plain language, updated for ${DATA_EDITION}.`;
 
-// ---------- install ----------
+// ---------- install (browser only; never shown inside the installed app) ----------
 const installBtn = $('#install');
+const installNowBtns = [$('#install-now'), $('#install-now-desktop')];
 let deferredPrompt = null;
+const setInstallButtons = (show) => { installBtn.hidden = !show; installNowBtns.forEach((b) => { b.hidden = !show; }); };
 window.addEventListener('beforeinstallprompt', (ev) => {
   ev.preventDefault();
+  if (isApp) return;
   deferredPrompt = ev;
-  installBtn.hidden = false;
+  setInstallButtons(true);
 });
-installBtn.addEventListener('click', async () => {
-  if (!deferredPrompt) return;
+async function promptInstall() {
+  if (!deferredPrompt) { openInstall(); return; }
   deferredPrompt.prompt();
   try { await deferredPrompt.userChoice; } catch { /* ignore */ }
   deferredPrompt = null;
-  installBtn.hidden = true;
-});
-window.addEventListener('appinstalled', () => { installBtn.hidden = true; });
-
-const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-const standalone = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
-const hint = $('#ios-hint');
-if (isIOS && !standalone && !store.get('iosHintDismissed', false)) {
-  setTimeout(() => { hint.hidden = false; }, 1200);
+  setInstallButtons(false);
 }
-$('#ios-hint-close').addEventListener('click', () => { hint.hidden = true; store.set('iosHintDismissed', true); });
+installBtn.addEventListener('click', promptInstall);
+installNowBtns.forEach((b) => b.addEventListener('click', promptInstall));
+window.addEventListener('appinstalled', () => setInstallButtons(false));
+
+const ua = navigator.userAgent;
+const isIOS = /iphone|ipad|ipod/i.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+const isIPhone = /iphone|ipod/i.test(ua);
+const isAndroid = /android/i.test(ua);
+const inOtherApp = /FBAN|FBAV|Instagram|LinkedInApp|Line\/|Snapchat|GSA\//i.test(ua);
+const device = isIOS ? 'ios' : isAndroid ? 'android' : 'desktop';
+
+const installPage = $('#install-page');
+let installOpen = false;
+let installPushed = false;
+let focusBeforeInstall = null;
+
+function showDevice(d) {
+  installPage.querySelectorAll('.device').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.device === d)));
+  installPage.querySelectorAll('.howto').forEach((sec) => { sec.hidden = sec.dataset.panel !== d; });
+}
+function detectedText() {
+  const name = isIOS ? (isIPhone ? 'an iPhone' : 'an iPad') : isAndroid ? 'an Android phone' : 'a computer';
+  let text = `Showing the steps for ${name}. Pick another device above if that's wrong.`;
+  if (inOtherApp) text += ' This page looks like it is open inside another app, so open it in your browser first.';
+  return text;
+}
+function openInstall(push = true) {
+  if (isApp || installOpen) return;
+  focusBeforeInstall = document.activeElement;
+  installOpen = true;
+  showDevice(device);
+  $('#detected').textContent = detectedText();
+  installPage.hidden = false;
+  document.body.style.overflow = 'hidden';
+  if (push && location.hash !== '#install') { history.pushState({ install: true }, '', '#install'); installPushed = true; }
+  installPage.scrollTop = 0;
+  $('#install-title').focus({ preventScroll: true });
+}
+function closeInstall(fromHistory = false) {
+  if (!installOpen) return;
+  installOpen = false;
+  installPage.hidden = true;
+  document.body.style.overflow = '';
+  if (!fromHistory) {
+    if (installPushed) history.back();
+    else { history.replaceState(null, '', location.pathname + location.search); render(); }
+  }
+  installPushed = false;
+  if (focusBeforeInstall && focusBeforeInstall.focus) focusBeforeInstall.focus({ preventScroll: true });
+}
+$('#install-back').addEventListener('click', () => closeInstall());
+installPage.querySelector('.device-pick').addEventListener('click', (ev) => {
+  const b = ev.target.closest('.device');
+  if (b) showDevice(b.dataset.device);
+});
+$('#copy-install-link').addEventListener('click', async () => {
+  const link = `${location.origin}${location.pathname}#install`;
+  const ok = await copyText(link);
+  toast(ok ? 'Link copied' : escapeHtml(link));
+});
+document.addEventListener('click', (ev) => {
+  if (!ev.target.closest('[data-open-install]')) return;
+  if (!aboutEl.hidden) closeAbout();
+  openInstall();
+});
 
 // ---------- offline ----------
 if ('serviceWorker' in navigator) {
@@ -297,5 +380,9 @@ if ('serviceWorker' in navigator) {
 // ---------- start ----------
 readUrl();
 renderTabs();
+if (location.hash === '#install') {
+  if (isApp) history.replaceState(null, '', location.pathname + location.search);
+  else openInstall(false);
+}
 render();
 if (!qEl.value && !isIOS && window.matchMedia('(hover: hover)').matches) qEl.focus();

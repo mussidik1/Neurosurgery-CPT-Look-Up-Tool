@@ -139,10 +139,9 @@ function build() {
     fs.copyFileSync(path.join(SRC, 'icons', f), path.join(OUT, 'icons', f));
   }
   const fonts = {
-    'barlow-400.woff2': '@fontsource/barlow/files/barlow-latin-400-normal.woff2',
-    'barlow-500.woff2': '@fontsource/barlow/files/barlow-latin-500-normal.woff2',
-    'barlow-600.woff2': '@fontsource/barlow/files/barlow-latin-600-normal.woff2',
-    'barlow-condensed-600.woff2': '@fontsource/barlow-condensed/files/barlow-condensed-latin-600-normal.woff2',
+    'cardo-400.woff2': '@fontsource/cardo/files/cardo-latin-400-normal.woff2',
+    'cardo-400-italic.woff2': '@fontsource/cardo/files/cardo-latin-400-italic.woff2',
+    'cardo-700.woff2': '@fontsource/cardo/files/cardo-latin-700-normal.woff2',
   };
   for (const [dest, src] of Object.entries(fonts)) {
     fs.copyFileSync(path.join(ROOT, 'node_modules', src), path.join(OUT, 'fonts', dest));
