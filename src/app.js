@@ -53,6 +53,8 @@ let category = -1;
 let installOpen = false;
 
 // ---------- rendering ----------
+// Let long compounds such as "laminectomy/facetectomy/foraminotomy" wrap after each slash (closing tags are left alone).
+const breakSlashes = (html) => html.replace(/([^<])\//g, '$1/<wbr>');
 const refButton = (c) => (byCode.has(c) ? `<button class="ref" type="button" data-ref="${c}">${c}</button>` : c);
 
 function linkCodes(html) {
@@ -70,7 +72,7 @@ function extrasHTML(e) {
   const rules = BUNDLES[e.code];
   if (rules && rules.length) {
     parts.push(`<ul class="bundle">${rules.map(([kind, codes, reason]) =>
-      `<li>${kind === 'inc' ? 'Don’t add' : 'Not billed with'} ${joinCodes(codes)}: ${linkCodes(escapeHtml(reason))}.</li>`).join('')}</ul>`);
+      `<li>${kind === 'inc' ? 'Don’t add' : 'Not billed with'} ${joinCodes(codes)}: ${breakSlashes(linkCodes(escapeHtml(reason)))}.</li>`).join('')}</ul>`);
   }
   const dx = DX[e.code];
   if (dx && dx.length) {
@@ -93,9 +95,9 @@ function hitHTML(e, q, showSub = true) {
   return `<li class="hit" data-code="${e.code}" style="--tab: var(--cat-${SLUG[e.cat]})">
   <button class="copy" type="button" data-copy="${e.code}" aria-label="${escapeHtml(label)}">
     <span class="code">${e.sys === 'MOD' ? '-' : ''}${escapeHtml(e.code)}</span>
-    <span class="name">${q ? highlight(e.name, q) : escapeHtml(e.name)}</span>
+    <span class="name">${breakSlashes(q ? highlight(e.name, q) : escapeHtml(e.name))}</span>
     ${showSub || tags.length ? `<span class="meta">${showSub ? `<span class="sub">${escapeHtml(e.sub)}</span>` : ''}${tags.join('')}</span>` : ''}
-  </button>${e.note ? `\n  <p class="note">${linkCodes(escapeHtml(e.note))}</p>` : ''}${extrasHTML(e)}
+  </button>${e.note ? `\n  <p class="note">${breakSlashes(linkCodes(escapeHtml(e.note)))}</p>` : ''}${extrasHTML(e)}
   <button class="star" type="button" data-star="${e.code}" aria-pressed="${isStar}" aria-label="${isStar ? 'Unstar' : 'Star'} ${e.code}">${STAR}</button>
 </li>`;
 }
@@ -368,13 +370,15 @@ if (aboutCount) aboutCount.textContent = `${fmt(COUNTS.total)} entries: ${fmt(CO
 const footCount = $('#foot-count');
 if (footCount) footCount.textContent = `${fmt(COUNTS.total)} codes in plain language, updated for ${DATA_EDITION}.`;
 
-// ---------- problem reports: the email is prefilled with the build and the current search ----------
-on('#report', 'click', (ev) => {
+// ---------- problem reports (top banner and footer): the email is prefilled with the build and the current search ----------
+document.addEventListener('click', (ev) => {
+  const link = ev.target.closest('[data-report]');
+  if (!link) return;
   const q = qEl.value.trim();
   const where = isApp ? 'Home Screen app' : 'browser';
   const deviceName = isIOS ? (isIPhone ? 'iPhone' : 'iPad') : isAndroid ? 'Android' : 'computer';
   const body = ['What happened?', '', '', '--', ...(q ? [`Search: ${q}`] : []), `Build: ${root.dataset.build || '?'} (${deviceName}, ${where})`].join('\r\n');
-  ev.currentTarget.href = `mailto:mussidik1@gmail.com?subject=${encodeURIComponent('Neuro CPT problem report')}&body=${encodeURIComponent(body)}`;
+  link.href = `mailto:mussidik1@gmail.com?subject=${encodeURIComponent('Neuro CPT problem report')}&body=${encodeURIComponent(body)}`;
 });
 
 // ---------- install (browser only; never shown inside the installed app) ----------
