@@ -131,11 +131,29 @@ add("E/M", "Hospital, ED & critical care", [
   ["99283", "Emergency department visit – low MDM", "ed visit level 3"],
   ["99284", "Emergency department visit – moderate MDM", "ed visit level 4"],
   ["*99285", "Emergency department visit – high MDM", "ed visit level 5|er visit|emergency visit"],
-  ["*99291", "Critical care, first 30–74 minutes", "critical care|icu care|critical care time|critical care first hour"],
+  ["*99291", "Critical care, first 30–74 minutes", "critical care|icu care|critical care time|critical care first hour", "Any age in the ED. Hospital inpatients 5 and younger use the per-day codes 99468–99476."],
   ["99292", "Critical care, each additional 30 minutes", "critical care additional|critical care add-on", "Add-on to 99291."],
+  ["99499", "Unlisted evaluation and management service", "unlisted e/m|unlisted em|tele-icu|teleicu|tele icu|remote critical care|virtual icu|eicu|telecritical care", "CPT points remote video critical care (tele-ICU) here; the old codes 0188T and 0189T were deleted in 2019. Medicare telehealth critical care consults: G0508 and G0509."],
   ["99418", "Prolonged inpatient/observation E/M, each 15 minutes beyond the highest level", "prolonged inpatient service", "Medicare uses G0316."],
   ["99497", "Advance care planning, first 30 minutes", "acp|advance care planning|goals of care|code status discussion", "Each additional 30 min: 99498."],
   ["99498", "Advance care planning, each additional 30 minutes", "add-on advance care planning"],
+]);
+
+add("E/M", "Pediatric & neonatal critical care", [
+  ["99468", "Neonatal critical care, initial day (28 days old or younger)", "nicu critical care|neonatal critical care|newborn critical care|nicu admission critical", "Inpatient, per day. Includes most bedside procedures the same physician does that day (intubation, umbilical and central lines, LP, ventilator management). Later days: 99469."],
+  ["99469", "Neonatal critical care, each subsequent day (28 days old or younger)", "nicu critical care subsequent|neonatal critical care daily|nicu daily critical care", "Initial day: 99468."],
+  ["99471", "Pediatric critical care, initial day (29 days through 24 months)", "picu critical care|pediatric critical care|infant critical care|picu admission", "Inpatient, per day. Includes most bedside procedures the same physician does that day (intubation, central and arterial lines, LP, ventilator management). Later days: 99472. Ages 2–5: 99475."],
+  ["99472", "Pediatric critical care, each subsequent day (29 days through 24 months)", "picu critical care subsequent|pediatric critical care daily|infant critical care daily", "Initial day: 99471."],
+  ["99475", "Pediatric critical care, initial day (2 through 5 years)", "picu critical care 2 to 5|toddler critical care|preschool critical care|child critical care", "Inpatient, per day. Later days: 99476. Age 6 and older: time-based 99291 and 99292."],
+  ["99476", "Pediatric critical care, each subsequent day (2 through 5 years)", "picu critical care 2 to 5 subsequent|child critical care daily", "Initial day: 99475."],
+  ["99477", "Neonatal intensive care (not critical), initial day, 28 days old or younger", "nicu intensive care|neonatal intensive care|nicu admission|intensive observation newborn", "For a newborn who needs intensive observation and frequent interventions but is not critically ill. Later days for a recovering infant: 99478–99480 by current weight."],
+  ["99478", "Infant intensive care (not critical), subsequent day, current weight under 1500 g", "very low birth weight|vlbw|nicu daily care vlbw|recovering vlbw infant", "1500–2500 g: 99479. 2501–5000 g: 99480."],
+  ["99479", "Infant intensive care (not critical), subsequent day, current weight 1500–2500 g", "low birth weight|lbw|nicu daily care lbw|recovering lbw infant"],
+  ["99480", "Infant intensive care (not critical), subsequent day, current weight 2501–5000 g", "nicu daily care|recovering infant intensive care"],
+  ["99466", "Critical care during interfacility transport, child 24 months or younger, first 30–74 minutes", "pediatric transport|neonatal transport|transport critical care|interfacility transport|peds transport|nicu transport", "Face-to-face care on board. Each additional 30 minutes: 99467. Directing the team without riding along: 99485."],
+  ["99467", "Critical care during interfacility transport, child 24 months or younger, each additional 30 minutes", "pediatric transport additional|transport critical care additional", "Add-on to 99466."],
+  ["99485", "Supervision of interfacility transport by a control physician, child 24 months or younger, first 30 minutes", "transport medical control|control physician|transport supervision|pediatric transport supervision|medical command transport", "Directing the transport team by two-way communication, not on board. Each additional 30 minutes: 99486."],
+  ["99486", "Supervision of interfacility transport by a control physician, child 24 months or younger, each additional 30 minutes", "transport medical control additional", "Add-on to 99485."],
 ]);
 
 add("E/M", "Telehealth, digital & care management", [
@@ -230,6 +248,8 @@ add("Modifiers", "HCPCS modifiers", [
   ["AS", "Non-physician assistant at surgery (PA, NP or CNS)", "pa assist|np assist|physician assistant at surgery|-as|modifier as"],
   ["GC", "Service performed in part by a resident under a teaching physician", "resident modifier|teaching physician|-gc|modifier gc"],
   ["FS", "Split (or shared) E/M visit", "split shared visit|-fs|modifier fs"],
+  ["AI", "Principal physician of record (admitting or attending physician, Medicare)", "principal physician of record|admitting physician|attending of record|-ai|modifier ai", "Added to the initial hospital or nursing facility visit by the physician who oversees the patient's care. Consultants bill the same visit codes without it."],
+  ["FT", "Unrelated E/M visit during a postoperative period, or on the same day as a procedure or another visit (Medicare)", "unrelated visit global period|unrelated critical care|-ft|modifier ft|global period unrelated visit", "Medicare uses it, for example, for critical care during the same physician's global surgical period when the critical care is unrelated to the surgery."],
   ["XE", "Separate encounter (subset of -59)", "separate encounter|-xe|modifier xe"],
   ["XS", "Separate structure or organ (subset of -59)", "separate structure|separate organ|-xs|modifier xs"],
   ["XP", "Separate practitioner (subset of -59)", "separate practitioner|-xp|modifier xp"],
@@ -262,6 +282,8 @@ add("HCPCS", "Medicare G-codes", [
   ["G2211", "Visit complexity add-on for longitudinal care (Medicare)", "complexity add-on|g2211|longitudinal care add-on"],
   ["G2212", "Prolonged outpatient E/M, each 15 minutes (Medicare)", "medicare prolonged visit"],
   ["G0316", "Prolonged inpatient/observation E/M, each 15 minutes (Medicare)", "medicare prolonged inpatient"],
+  ["G0508", "Telehealth critical care consultation, initial, about 60 minutes (Medicare)", "telehealth critical care|critical care telehealth consult|tele-icu consult|teleicu consult|telestroke consult|eicu consult|virtual icu consult", "For a remote specialist consulting for the treating team. Follow-up: G0509."],
+  ["G0509", "Telehealth critical care consultation, subsequent, about 50 minutes (Medicare)", "telehealth critical care follow-up|tele-icu follow up|teleicu follow up", "Initial: G0508."],
   ["G0453", "Remote/nearby intraoperative neurophysiology monitoring, per patient, each 15 minutes (Medicare)", "medicare ionm|remote ionm medicare"],
   ["G0277", "Hyperbaric oxygen under pressure, full-body chamber, per 30-minute interval", "hyperbaric oxygen|hbot|hyperbaric chamber|hbo"],
   ["G0283", "Unattended electrical stimulation (Medicare)", "unattended e-stim|electrical stimulation unattended"],

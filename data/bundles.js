@@ -50,5 +50,19 @@ bundle('61640', '61650', 'same vascular territory');
 included(['37215', '37216'], ['36222', '36223', '36224'], 'treated carotid; its angiography is included in the stent code');
 
 // ---------- Critical care (same physician, same time period) ----------
-included(['99291', '99292'], ['36410', '36415', '36600', '43752', '43753', '71045', '71046', '92953', '94002', '94003', '94660',
-  '94760', '94761', '94762'], 'included in critical care when the same physician does it');
+included(['99291', '99292'], ['36000', '36410', '36415', '36591', '36600', '43752', '43753', '71045', '71046', '92953', '93598',
+  '94002', '94003', '94004', '94660', '94662', '94760', '94761', '94762'], 'included in critical care when the same physician does it');
+
+// Neonatal and pediatric critical and intensive care are per-day codes that also include the bedside procedures above
+// plus intubation, central and arterial lines, LP, bladder catheters and transfusion.
+included(['99468', '99469', '99471', '99472', '99475', '99476', '99477', '99478', '99479', '99480'], ['31500', '36000', '36410',
+  '36415', '36430', '36555', '36591', '36600', '36620', '43752', '43753', '51701', '51702', '62270', '71045', '71046', '92953',
+  '93598', '94002', '94003', '94004', '94660', '94662', '94760', '94761', '94762'],
+  'included in the per-day neonatal and pediatric critical and intensive care codes when the same physician does it that day');
+
+// ---------- ECMO ----------
+included(['33946', '33947'], ['33948', '33949'], 'not on the day ECMO starts, by any physician; initiation covers that day’s management');
+
+// ---------- Pericardium ----------
+included(['33017', '33018'], ['33016'], 'the needle drainage is part of placing the drain');
+included(['33016', '33017', '33018'], ['76942', '77002', '77012', '77021'], 'imaging guidance is included');

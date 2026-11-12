@@ -243,6 +243,7 @@ add("Medicine", "Cardiac, vascular & pulmonary testing", [
   ["*93000", "ECG, 12-lead, with interpretation and report", "ekg|ecg|electrocardiogram|12 lead"],
   ["93005", "ECG tracing only", "ekg tracing only"],
   ["93010", "ECG interpretation and report only", "ekg interpretation|ekg read"],
+  ["93598", "Cardiac output measurement (thermodilution or indicator dilution) during congenital heart catheterization, add-on", "cardiac output measurement|thermodilution cardiac output|indicator dilution", "CPT also lists it among the services included in critical care (99291/99292)."],
   ["93040", "Rhythm ECG, 1–3 leads, with interpretation", "rhythm strip"],
   ["*93306", "Transthoracic echo, complete, with spectral and color Doppler", "echo|echocardiogram|tte|transthoracic echo"],
   ["93308", "Transthoracic echo, limited or follow-up", "limited echo|bedside echo"],
@@ -319,7 +320,8 @@ add("Medicine", "Psychiatry & behavioral health", [
 add("Medicine", "Dialysis, wound & other", [
   ["90935", "Hemodialysis with single physician evaluation", "hemodialysis|dialysis|hd"],
   ["90937", "Hemodialysis requiring repeated evaluation", "hemodialysis complex"],
-  ["90945", "Dialysis other than hemodialysis (e.g., CRRT, peritoneal), single evaluation", "crrt|cvvhd|peritoneal dialysis"],
+  ["90945", "Dialysis other than hemodialysis (e.g., CRRT, peritoneal), single evaluation", "crrt|cvvhd|peritoneal dialysis", "Repeated evaluations that day: 90947."],
+  ["90947", "Dialysis other than hemodialysis (e.g., CRRT, peritoneal), repeated evaluations", "crrt repeated evaluations|cvvhdf|cvvh|crrt complex|peritoneal dialysis repeated", "Single evaluation that day: 90945."],
   ["90960", "ESRD monthly services, age 20+, 4+ visits per month", "esrd monthly|monthly dialysis visit"],
   ["*99183", "Physician attendance and supervision of hyperbaric oxygen therapy, per session", "hyperbaric oxygen|hbot|hyperbaric medicine|hbo2", "Facility chamber time is billed with G0277."],
   ["95249", "Continuous glucose monitoring, 72+ hours, patient-provided equipment (setup/training)", "cgm setup|dexcom start|libre start"],
