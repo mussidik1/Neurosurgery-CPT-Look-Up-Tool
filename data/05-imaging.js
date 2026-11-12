@@ -77,7 +77,7 @@ add("Imaging", "Spine X-ray & myelography", [
   ["77012", "CT guidance for needle placement", "ct guidance|ct guided biopsy guidance"],
   ["77021", "MRI guidance for needle placement", "mri guidance needle"],
   ["76942", "Ultrasound guidance for needle placement", "ultrasound guidance|us guided injection|ultrasound guided needle"],
-  ["76937", "Ultrasound guidance for vascular access (with documentation)", "ultrasound guided iv|us guided line|ultrasound vascular access", "Add-on code."],
+  ["76937", "Ultrasound guidance for vascular access (with documentation)", "ultrasound guided iv|us guided line|ultrasound vascular access|ultrasound guided central line|us guided cvc|ultrasound guided cvc|ultrasound guided arterial line|us guided art line", "Add-on code. The note must record the access-site evaluation, that the chosen vessel is open, real-time needle entry, and a saved image."],
 ]);
 
 add("Imaging", "CT – body", [
@@ -163,7 +163,7 @@ add("Imaging", "X-ray – chest, abdomen & extremities", [
 
 add("Imaging", "Ultrasound & vascular studies", [
   ["*76700", "Ultrasound abdomen, complete", "abdominal ultrasound|ultrasound abdomen|us abdomen"],
-  ["76705", "Ultrasound abdomen, limited (e.g., RUQ, single organ)", "ruq ultrasound|gallbladder ultrasound|liver ultrasound|limited abdominal ultrasound|fast exam", "FAST exams are often reported with 76705 (some add 93308 and 76604); confirm local policy."],
+  ["76705", "Ultrasound abdomen, limited (e.g., RUQ, single organ)", "ruq ultrasound|gallbladder ultrasound|liver ultrasound|limited abdominal ultrasound|fast exam", "FAST exams are often reported with 76705 (some add 93308 and 76604); confirm local policy. Bedside (point-of-care) use needs saved images and a written report; in the hospital, bill with modifier 26 (professional part)."],
   ["76770", "Ultrasound retroperitoneal (e.g., renal), complete", "renal ultrasound|kidney ultrasound"],
   ["76775", "Ultrasound retroperitoneal, limited", "limited renal ultrasound"],
   ["76706", "Ultrasound abdominal aorta, AAA screening", "aaa screening|aortic aneurysm screening"],
@@ -177,7 +177,7 @@ add("Imaging", "Ultrasound & vascular studies", [
   ["76818", "Fetal biophysical profile with non-stress test", "bpp|biophysical profile"],
   ["76870", "Ultrasound scrotum and contents", "scrotal ultrasound|testicular ultrasound"],
   ["76641", "Ultrasound breast, unilateral, complete", "breast ultrasound"],
-  ["76604", "Ultrasound chest (incl. mediastinum)", "chest ultrasound|lung ultrasound"],
+  ["76604", "Ultrasound chest (incl. mediastinum)", "chest ultrasound|lung ultrasound", "Bedside (point-of-care) use needs saved images and a written report; in the hospital, bill with modifier 26 (professional part)."],
   ["76881", "Ultrasound of a joint, complete", "joint ultrasound complete"],
   ["76882", "Ultrasound of a joint or extremity structure, limited", "msk ultrasound|limited joint ultrasound|tendon ultrasound"],
   ["76883", "Ultrasound of nerve(s) along entire course in one extremity", "nerve ultrasound|neuromuscular ultrasound"],

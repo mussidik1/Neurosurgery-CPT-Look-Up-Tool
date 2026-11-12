@@ -51,14 +51,28 @@ included(['37215', '37216'], ['36222', '36223', '36224'], 'treated carotid; its 
 
 // ---------- Critical care (same physician, same time period) ----------
 included(['99291', '99292'], ['36000', '36410', '36415', '36591', '36600', '43752', '43753', '71045', '71046', '92953', '93598',
-  '94002', '94003', '94004', '94660', '94662', '94760', '94761', '94762'], 'included in critical care when the same physician does it');
+  '94002', '94003', '94004', '94660', '94662', '94760', '94761', '94762'],
+  'included in critical care when the same physician does it (IV starts and blood draws, chest x-ray reading, pulse oximetry, gastric tubes, transcutaneous pacing, cardiac output and ventilator or CPAP management)');
+
+// Advance care planning is not reported on the same date as critical care.
+included(['99291', '99292', '99468', '99469', '99471', '99472', '99475', '99476'], ['99497', '99498'],
+  'advance care planning isn’t billed on the same date as critical care');
+
+// Ventilator management is not reported with any E/M visit (CPT 99202-99499). Shown on the visit cards;
+// the ventilator cards carry the full rule in their notes.
+included(['99221', '99222', '99223', '99231', '99232', '99233', '99234', '99235', '99236', '99238', '99239', '99252',
+  '99253', '99254', '99255', '99281', '99282', '99283', '99284', '99285'], ['94002', '94003', '94004'],
+  'ventilator management is part of any E/M visit by the same physician that day', { oneWay: true });
 
 // Neonatal and pediatric critical and intensive care are per-day codes that also include the bedside procedures above
 // plus intubation, central and arterial lines, LP, bladder catheters and transfusion.
 included(['99468', '99469', '99471', '99472', '99475', '99476', '99477', '99478', '99479', '99480'], ['31500', '36000', '36410',
   '36415', '36430', '36555', '36591', '36600', '36620', '43752', '43753', '51701', '51702', '62270', '71045', '71046', '92953',
   '93598', '94002', '94003', '94004', '94660', '94662', '94760', '94761', '94762'],
-  'included in the per-day neonatal and pediatric critical and intensive care codes when the same physician does it that day');
+  'included in the per-day neonatal and pediatric critical and intensive care codes when the same physician does it that day (intubation, central and arterial lines, IV starts and blood draws, transfusion, LP, bladder and gastric tubes, chest x-ray reading, pulse oximetry, transcutaneous pacing, cardiac output and ventilator or CPAP management)');
+
+// ---------- Bronchoscopy ----------
+included(['31624', '31645', '31646'], ['31622'], 'the diagnostic bronchoscopy is included');
 
 // ---------- ECMO ----------
 included(['33946', '33947'], ['33948', '33949'], 'not on the day ECMO starts, by any physician; initiation covers that day’s management');

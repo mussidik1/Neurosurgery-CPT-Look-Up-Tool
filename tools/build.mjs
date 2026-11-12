@@ -58,7 +58,8 @@ function loadData() {
     }
   };
   const bundle = (a, b, reason) => bundles.push({ type: 'pair', a: [a], b: [b], reason, file: current });
-  const included = (codes, inc, reason) => bundles.push({ type: 'incl', a: codes, b: inc, reason, file: current });
+  // included(codes, inclusions, reason[, { oneWay: true }]): oneWay shows the reminder only on the main codes' cards.
+  const included = (codes, inc, reason, opts = {}) => bundles.push({ type: 'incl', a: codes, b: inc, reason, oneWay: !!opts.oneWay, file: current });
   const dx = (codes, icds) => dxGroups.push({ codes, icds, file: current });
   const files = fs.readdirSync(DATA_DIR).filter((f) => f.endsWith('.js')).sort();
   for (const f of files) {
@@ -127,7 +128,10 @@ function bundleMap(bundles) {
   };
   for (const b of bundles) {
     if (b.type === 'pair') { push(b.a[0], 'not', b.b, b.reason); push(b.b[0], 'not', b.a, b.reason); }
-    else { for (const p of b.a) push(p, 'inc', b.b, b.reason); for (const i of b.b) push(i, 'not', b.a, b.reason); }
+    else {
+      for (const p of b.a) push(p, 'inc', b.b, b.reason);
+      if (!b.oneWay) for (const i of b.b) push(i, 'not', b.a, b.reason);
+    }
   }
   return Object.fromEntries(map);
 }

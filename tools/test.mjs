@@ -98,6 +98,11 @@ const cases = [
   ['negative pressure ventilation', ['94662'], 1],
   ['critical care', ['99291'], 1],
   ['crrt', ['90945', '90947'], 2],
+  // Corrections from the intensivist review
+  ['family meeting', ['99497'], 1],
+  ['us guided cvc', ['36556', '76937'], 2],
+  ['chest tube', ['32556'], 3],
+  ['goals of care', ['99497'], 1],
   ['lumbar myelogram', ['62304'], 1],
   ['ct myelogram', ['62284', '72132', '72126'], 3],
   ['gardner wells', ['20660'], 1],
