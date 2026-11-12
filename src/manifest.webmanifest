@@ -1,6 +1,6 @@
 {
-  "name": "Neurosurgery CPT Look-Up Tool",
-  "short_name": "Neuro CPT",
+  "name": "CPT Look-Up Tool",
+  "short_name": "CPT Look-Up",
   "description": "Type a procedure, abbreviation or code and get the CPT code. Neurosurgery-focused, works offline.",
   "id": "./",
   "start_url": "./",

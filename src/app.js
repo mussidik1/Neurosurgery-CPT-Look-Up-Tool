@@ -378,7 +378,7 @@ document.addEventListener('click', (ev) => {
   const where = isApp ? 'Home Screen app' : 'browser';
   const deviceName = isIOS ? (isIPhone ? 'iPhone' : 'iPad') : isAndroid ? 'Android' : 'computer';
   const body = ['What happened?', '', '', '--', ...(q ? [`Search: ${q}`] : []), `Build: ${root.dataset.build || '?'} (${deviceName}, ${where})`].join('\r\n');
-  link.href = `mailto:mussidik1@gmail.com?subject=${encodeURIComponent('Neuro CPT problem report')}&body=${encodeURIComponent(body)}`;
+  link.href = `mailto:mussidik1@gmail.com?subject=${encodeURIComponent('CPT Look-Up problem report')}&body=${encodeURIComponent(body)}`;
 });
 
 // ---------- install (browser only; never shown inside the installed app) ----------

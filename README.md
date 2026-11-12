@@ -1,4 +1,4 @@
-# Neurosurgery CPT Look-Up Tool
+# CPT Look-Up Tool
 
 Type a procedure, abbreviation or code and get the CPT code. Built for neurosurgery (spine, cranial, peripheral nerve, functional, neuro-endovascular, IONM, modifiers), with common general procedures, imaging, labs and HCPCS codes too.
 
